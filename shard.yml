@@ -1,0 +1,13 @@
+name: neo4j
+version: 0.1.0
+
+authors:
+  - Jamie Gaskins <jgaskins@gmail.com>
+
+crystal: 0.22.0
+
+dependencies:
+  faker:
+    github: askn/faker
+
+license: MIT
