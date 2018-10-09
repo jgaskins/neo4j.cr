@@ -6,8 +6,4 @@ authors:
 
 crystal: 0.22.0
 
-dependencies:
-  faker:
-    github: askn/faker
-
 license: MIT
