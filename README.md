@@ -205,6 +205,8 @@ cart = Cart.new(result.map { |(product, cart_item)|
 - Streaming results, letting us send a query and consume its result lazily
   - For example, if we query 1000 results, we could defer deserializing them until the application needs them, potentially saving on processing
   - I don't know if this would be the default
+- `bolt+routing`
+  - I'm checking out the Java driver to see how they handle routing between core servers in Enterprise clusters
 
 ## Acknowledgements/Credits
 
