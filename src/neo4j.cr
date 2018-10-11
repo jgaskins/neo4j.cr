@@ -208,10 +208,6 @@ module Neo4j
         @connection.flush
       end
 
-      private def write_footer
-        write 0_u16
-      end
-
       private def write_value(value)
         @connection.write PackStream.pack(value)
       end
