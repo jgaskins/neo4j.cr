@@ -181,7 +181,6 @@ module Neo4j
       end
 
       private def read_response
-        start = Time.now
         length = 1_u16
         messages = [] of Bytes
         length = @connection.read_bytes(UInt16, IO::ByteFormat::BigEndian)
@@ -190,7 +189,6 @@ module Neo4j
           @connection.read_fully bytes
           messages << bytes
           length = @connection.read_bytes(UInt16, IO::ByteFormat::BigEndian)
-          # pp length: length
         end
 
         bytes = Bytes.new(messages.map(&.size).sum)
