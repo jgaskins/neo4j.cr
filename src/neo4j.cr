@@ -71,7 +71,43 @@ module Neo4j
         init username, password
       end
 
-      def init(username, password)
+      def execute(query, parameters = {} of String => Type)
+        Result.new(type: run(query, parameters), data: pull_all)
+      end
+
+      def transaction
+        execute "BEGIN"
+
+        yield
+
+        execute "COMMIT"
+      rescue e : QueryException
+        ack_failure
+        run "ROLLBACK"
+        reset
+        raise e
+      rescue e # Don't ack_failure if it wasn't a QueryException
+        run "ROLLBACK"
+        reset
+        raise e
+      end
+
+      def close
+        @connection.close
+      end
+
+      # If the connection gets into a wonky state, this method tells the server
+      # to reset it back to a normal state, but you lose everything you haven't
+      # pulled down yet.
+      def reset
+        write_message do |msg|
+          msg.write_structure_start 0
+          msg.write_byte COMMANDS[:reset]
+        end
+        read_response
+      end
+
+      private def init(username, password)
         write_message do |msg|
           msg.write_structure_start 1
           msg.write_byte COMMANDS[:init]
@@ -85,7 +121,7 @@ module Neo4j
         read_response
       end
 
-      def write_message
+      private def write_message
         packer = PackStream::Packer.new
         yield packer
 
@@ -101,7 +137,7 @@ module Neo4j
         @connection.flush
       end
 
-      def run(statement, parameters = {} of String => Type)
+      private def run(statement, parameters = {} of String => Type)
         write_message do |msg|
           msg.write_structure_start 2
           msg.write_byte COMMANDS[:run]
@@ -120,7 +156,7 @@ module Neo4j
         end
       end
 
-      def pull_all
+      private def pull_all
         write_message do |msg|
           msg.write_structure_start 0
           msg.write_byte COMMANDS[:pull_all]
@@ -144,84 +180,54 @@ module Neo4j
         results
       end
 
-      def read_response
+      private def read_response
+        start = Time.now
+        length = 1_u16
+        messages = [] of Bytes
         length = @connection.read_bytes(UInt16, IO::ByteFormat::BigEndian)
-        bytes = Bytes.new(length)
-        @connection.read_fully bytes
-        footer = @connection.read_bytes UInt16
-        if footer != 0
-          raise "Footer is wrong: #{footer.to_s(16)}"
+        while length != 0x0000
+          bytes = Bytes.new(length)
+          @connection.read_fully bytes
+          messages << bytes
+          length = @connection.read_bytes(UInt16, IO::ByteFormat::BigEndian)
+          # pp length: length
         end
 
+        bytes = Bytes.new(messages.map(&.size).sum)
+        current_byte = 0
+        messages.reduce(bytes) do |chunk, msg|
+          msg.copy_to chunk
+          current_byte += msg.size
+
+          bytes + current_byte
+        end
+        start = Time.now
         PackStream.unpack(bytes)
       end
 
-      def write(value)
+      private def write(value)
         @connection.write_bytes value, IO::ByteFormat::BigEndian
         @connection.flush
       end
 
-      def write_footer
+      private def write_footer
         write 0_u16
       end
 
-      def write_value(value)
+      private def write_value(value)
         @connection.write PackStream.pack(value)
       end
 
-      def handshake
+      private def handshake
         (GOGOBOLT + SUPPORTED_VERSIONS).to_slice
       end
-      
-      def transaction
-        execute "BEGIN"
 
-        yield
-
-        execute "COMMIT"
-      rescue e
-        ack_failure
-        run "ROLLBACK"
-        reset
-        raise e
-      end
-
-      def ack_failure
+      private def ack_failure
         write_message do |msg|
           msg.write_structure_start 0
           msg.write_byte COMMANDS[:ack_failure]
         end
         read_response
-      end
-
-      def reset
-        write_message do |msg|
-          msg.write_structure_start 0
-          msg.write_byte COMMANDS[:reset]
-        end
-        read_response
-      end
-
-      def execute(query, parameters = {} of String => Type)
-        # benchmark "Cypher query" do
-          Result.new(
-            type: run(query, parameters),
-            data: pull_all,
-          )
-        # end
-      end
-
-      def close
-        @connection.close
-      end
-
-      private def benchmark(message)
-        start = Time.now
-        result = yield
-        finish = Time.now
-        puts "#{message}: #{finish - start}"
-
-        result
       end
 
       private def send_message(string : String)

@@ -1,6 +1,6 @@
 module Neo4j
   module PackStream
-    class Packer
+    struct Packer
       def initialize(@io : IO = IO::Memory.new)
       end
 
