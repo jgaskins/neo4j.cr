@@ -1,5 +1,7 @@
 # neo4j.cr
 
+[![Join the chat at https://gitter.im/jgaskins/neo4j.cr](https://badges.gitter.im/jgaskins/neo4j.cr.svg)](https://gitter.im/jgaskins/neo4j.cr?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 Crystal implementation of a Neo4j driver using the Bolt protocol.
 
 ## Installation
