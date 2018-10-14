@@ -42,7 +42,7 @@ module Neo4j
         initialize URI.parse(url), ssl
       end
 
-      def initialize(uri : URI, ssl=true)
+      def initialize(@uri : URI, @ssl=true)
         host = uri.host.to_s
         port = uri.port || 7687
         username = uri.user.to_s
@@ -154,6 +154,9 @@ module Neo4j
         else
           raise ::Neo4j::UnknownResult.new("Cannot identify this result: #{result.inspect}")
         end
+      rescue ex : IO::EOFError
+        initialize @uri, @ssl
+        run statement, parameters
       end
 
       private def pull_all
