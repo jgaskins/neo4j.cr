@@ -23,11 +23,6 @@ module Neo4j
         reset: 0x0F,
       }
 
-      @host = "localhost"
-      @port = 7687
-      @username = "neo4j"
-      @password = "neo4j"
-
       @connection : (TCPSocket | OpenSSL::SSL::Socket::Client)
 
       def initialize
