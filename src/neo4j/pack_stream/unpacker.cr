@@ -2,7 +2,7 @@ require "./lexer"
 
 module Neo4j
   module PackStream
-    class Unpacker
+    struct Unpacker
       STRUCTURE_TYPES = {
         node: 0x4e,
         relationship: 0x52,

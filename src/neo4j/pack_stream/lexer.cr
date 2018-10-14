@@ -2,7 +2,7 @@ require "./token"
 
 module Neo4j
   module PackStream
-    class Lexer
+    struct Lexer
       getter token
       getter current_byte
       getter byte_number
