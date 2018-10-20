@@ -29,6 +29,9 @@ module Neo4j
         {% __properties__[key] = { type: value } %}
       {% end %}
       {% __properties__[key][:key_id] = key.id.gsub(/\?$/, "") %}
+      {% if value.is_a?(Generic) && value.type_vars.any?(&.resolve.nilable?) %}
+        {% __properties__[key][:nilable] = true %}
+      {% end %}
     {% end %}
 
     {% for key, value in __properties__ %}
