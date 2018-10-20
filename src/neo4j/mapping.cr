@@ -31,6 +31,7 @@ module Neo4j
       {% __properties__[key][:key_id] = key.id.gsub(/\?$/, "") %}
       {% if value.is_a?(Generic) && value.type_vars.any?(&.resolve.nilable?) %}
         {% __properties__[key][:nilable] = true %}
+        {% __properties__[key][:optional] = true %}
       {% end %}
     {% end %}
 
@@ -86,7 +87,7 @@ module Neo4j
             raise ArgumentError.new("Property #{{{key.id}}} must be a String or Int value to cast into a Time")
           end
         {% else %}
-          @{{key.id}} = %node.properties[{{key.stringify}}].as({{value[:type]}}{{(value[:nilable] ? "?" : "").id}})
+          @{{key.id}} = %property_value.as({{value[:type]}}{{(value[:nilable] && !value[:optional] ? "?" : "").id}})
         {% end %}
       {% end %}
     end
