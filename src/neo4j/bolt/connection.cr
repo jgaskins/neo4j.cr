@@ -1,3 +1,7 @@
+require "../type"
+require "../pack_stream"
+require "../pack_stream/packer"
+
 module Neo4j
   module Bolt
     class Connection

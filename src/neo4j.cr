@@ -2,7 +2,7 @@ require "uri"
 require "socket"
 require "openssl"
 
-require "./neo4j/pack_stream"
+require "./neo4j/type"
 require "./neo4j/mapping"
 require "./neo4j/bolt/connection"
 
