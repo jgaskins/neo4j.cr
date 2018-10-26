@@ -118,7 +118,15 @@ module Neo4j
             "credentials" => password,
           })
         end
-        read_result
+
+        case result = read_result
+        when Success
+          result
+        when Failure
+          raise Exception.new(result.inspect)
+        else
+          raise Exception.new("Don't know how to handle result: #{result.inspect}")
+        end
       end
 
       private def write_message
