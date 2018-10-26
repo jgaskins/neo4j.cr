@@ -1,11 +1,9 @@
 require "../../../spec_helper"
 
+require "../../../../src/neo4j/pack_stream/unpacker"
+
 module Neo4j
   module PackStream
-    macro unpack(value)
-      Unpacker.new({{value}}).read
-    end
-
     describe Unpacker do
       it "unpacks ints" do
         unpack("\x7A").should eq 0x7A
