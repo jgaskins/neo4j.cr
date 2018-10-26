@@ -1,6 +1,10 @@
 require "../type"
 require "../pack_stream"
 require "../pack_stream/packer"
+require "../result"
+
+require "socket"
+require "openssl"
 
 module Neo4j
   module Bolt

@@ -1,5 +1,7 @@
 require "../spec_helper"
 
+require "../../src/neo4j/mapping"
+
 module Neo4j
   struct MappingNodeExample
     ::Neo4j.map_node(
