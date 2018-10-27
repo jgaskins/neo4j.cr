@@ -27,7 +27,7 @@ module Neo4j
       @connection : (TCPSocket | OpenSSL::SSL::Socket::Client)
 
       def initialize
-        initialize "bolt://neo4j:neo4j@localhost:7687"
+        initialize "bolt://neo4j:neo4j@localhost:7687", ssl: false
       end
 
       def initialize(url : String)
