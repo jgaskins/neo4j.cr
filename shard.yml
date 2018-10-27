@@ -6,4 +6,8 @@ authors:
 
 crystal: 0.22.0
 
+development_dependencies:
+  pool:
+    github: ysbaddaden/pool
+
 license: MIT
