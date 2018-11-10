@@ -45,7 +45,7 @@ module Neo4j
         it "handles nodes and relationships" do
           user_id = UUID.random.to_s
           group_id = UUID.random.to_s
-          now = Time.now.epoch
+          now = Time.now.to_unix
 
           pool.connection do |connection|
             result = connection.execute <<-CYPHER, user_id: user_id, group_id: group_id, now: now

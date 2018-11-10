@@ -28,7 +28,7 @@ module Neo4j
         labels: ["Foo", "Bar"],
         properties: {
           "name" => "Jamie",
-          "created_at" => Time.new(2015, 4, 20, 16, 20, 31).epoch,
+          "created_at" => Time.new(2015, 4, 20, 16, 20, 31).to_unix,
           "number" => 42,
           "nilable_value" => nil,
         } of String => Type,
@@ -55,7 +55,7 @@ module Neo4j
         type: "FOO_BAR",
         properties: {
           "role" => "user",
-          "added_at" => Time.new(2015, 4, 20, 16, 20, 31).epoch,
+          "added_at" => Time.new(2015, 4, 20, 16, 20, 31).to_unix,
           "number" => 42,
           "nilable_value" => "not nil this time",
         } of String => Type,
