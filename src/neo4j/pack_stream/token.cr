@@ -1,6 +1,19 @@
 module Neo4j
   module PackStream
     class Token
+      enum Type
+        Eof
+        Null
+        False
+        True
+        Array
+        Hash
+        Structure
+        Int
+        Float
+        String
+      end
+
       property type
 
       property string_value
@@ -10,7 +23,7 @@ module Neo4j
       property used
 
       def initialize
-        @type = :EOF
+        @type = Type::Eof
         @string_value = ""
         @int_value = 0_i8
         @float_value = 0.0_f64
@@ -25,16 +38,14 @@ module Neo4j
 
       def to_s(io)
         case @type
-        when :nil
-          io << :nil
-        when :STRING
+        when .string?
           @string_value.inspect(io)
-        when :INT
+        when .int?
           io << @int_value
-        when :FLOAT
+        when .float?
           io << @float_value
         else
-          io << @type
+          io << ":#{@type.to_s.upcase}"
         end
       end
     end

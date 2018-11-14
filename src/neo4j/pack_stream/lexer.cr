@@ -35,11 +35,11 @@ module Neo4j
 
         case current_byte
         when 0xC0
-          set_type_and_size(:nil, 0)
+          set_type_and_size(Token::Type::Null, 0)
         when 0xC2
-          set_type_and_size(:false, 0)
+          set_type_and_size(Token::Type::False, 0)
         when 0xC3
-          set_type_and_size(:true, 0)
+          set_type_and_size(Token::Type::True, 0)
         when 0x80..0x8F
           consume_string(current_byte - 0x80)
         when 0xD0
@@ -59,34 +59,34 @@ module Neo4j
         when 0xCB
           consume_int(read Int64)
         when 0x90..0x9F
-          set_type_and_size(:ARRAY, current_byte - 0x90)
+          set_type_and_size(Token::Type::Array, current_byte - 0x90)
         when 0xD4
-          set_type_and_size(:ARRAY, read UInt8)
+          set_type_and_size(Token::Type::Array, read UInt8)
         when 0xD5
-          set_type_and_size(:ARRAY, read UInt16)
+          set_type_and_size(Token::Type::Array, read UInt16)
         when 0xD6
-          set_type_and_size(:ARRAY, read UInt32)
+          set_type_and_size(Token::Type::Array, read UInt32)
         when 0xA0..0xAF
-          set_type_and_size(:HASH, current_byte - 0xA0)
+          set_type_and_size(Token::Type::Hash, current_byte - 0xA0)
         when 0xD8
-          set_type_and_size(:HASH, read UInt8)
+          set_type_and_size(Token::Type::Hash, read UInt8)
         when 0xD9
-          set_type_and_size(:HASH, read UInt16)
+          set_type_and_size(Token::Type::Hash, read UInt16)
         when 0xDA
-          set_type_and_size(:HASH, read UInt32)
+          set_type_and_size(Token::Type::Hash, read UInt32)
         when 0xB0..0xBF
-          set_type_and_size(:STRUCTURE, current_byte - 0xB0)
+          set_type_and_size(Token::Type::Structure, current_byte - 0xB0)
         when 0xDC
-          set_type_and_size(:STRUCTURE, read UInt8)
+          set_type_and_size(Token::Type::Structure, read UInt8)
         when 0xDD
-          set_type_and_size(:STRUCTURE, read UInt16)
+          set_type_and_size(Token::Type::Structure, read UInt16)
 
         # If we've gotten this far, I think it means it's a TINY_INT
         when 0x00..0x7F
-          @token.type = :INT
+          @token.type = Token::Type::Int
           @token.int_value = current_byte.to_i8
         when 0xF0..0xFF
-          @token.type = :INT
+          @token.type = Token::Type::Int
           @token.int_value = current_byte.to_i8
         else
           unexpected_byte!
@@ -107,7 +107,7 @@ module Neo4j
 
         unless byte
           @eof = true
-          @token.type = :EOF
+          @token.type = Token::Type::Eof
         end
 
         @current_byte = byte || 0.to_u8
@@ -120,18 +120,18 @@ module Neo4j
       end
 
       private def consume_int(value)
-        @token.type = :INT
+        @token.type = Token::Type::Int
         @token.int_value = value
       end
 
       private def consume_float(value)
-        @token.type = :FLOAT
+        @token.type = Token::Type::Float
         @token.float_value = value
       end
 
       private def consume_string(size)
         size = size.to_u32
-        @token.type = :STRING
+        @token.type = Token::Type::String
         @token.string_value = String.new(size) do |buffer|
           @io.read_fully(Slice.new(buffer, size))
           {size, 0}

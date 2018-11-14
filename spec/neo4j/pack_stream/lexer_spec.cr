@@ -3,10 +3,10 @@ require "../../../spec_helper"
 module Neo4j
   module PackStream
     describe Lexer do
-      it "lexes nil" do
+      it "lexes null" do
         lexer = Lexer.new("\xC0")
 
-        lexer.next_token.type.should eq :nil
+        lexer.next_token.type.should eq Token::Type::Null
       end
 
       it "lexes booleans" do
@@ -14,8 +14,8 @@ module Neo4j
         # values.
         lexer = Lexer.new("\xC2\xC3")
 
-        lexer.next_token.type.should eq :false
-        lexer.next_token.type.should eq :true
+        lexer.next_token.type.should eq Token::Type::False
+        lexer.next_token.type.should eq Token::Type::True
       end
 
       it "lexes strings" do
@@ -24,11 +24,11 @@ module Neo4j
         lexer = Lexer.new("\x85Jamie\xD0\x0DJamie Gaskins")
 
         lexer.next_token
-        lexer.token.type.should eq :STRING
+        lexer.token.type.should eq Token::Type::String
         lexer.token.string_value.should eq "Jamie"
 
         lexer.next_token
-        lexer.token.type.should eq :STRING
+        lexer.token.type.should eq Token::Type::String
         lexer.token.string_value.should eq "Jamie Gaskins"
       end
 
@@ -36,7 +36,7 @@ module Neo4j
         lexer = Lexer.new("\xC1\x01\x23\x45\x67\x89\xAB\xCD\xEF")
 
         lexer.next_token
-        lexer.token.type.should eq :FLOAT
+        lexer.token.type.should eq Token::Type::Float
         # The bytes 0123456789ABCDEF as a big-endian IEEE754 float results in a
         # very tiny positive number.
         lexer.token.float_value.should eq 3.512700564088504e-303
@@ -62,7 +62,7 @@ module Neo4j
         lexer = Lexer.new("\x90\x91")
 
         lexer.next_token
-        lexer.token.type.should eq :ARRAY
+        lexer.token.type.should eq Token::Type::Array
         lexer.token.size.should eq 0
 
         lexer.next_token
@@ -70,29 +70,29 @@ module Neo4j
 
         lexer = Lexer.new("\xD4\x10")
         lexer.next_token
-        lexer.token.type.should eq :ARRAY
+        lexer.token.type.should eq Token::Type::Array
         lexer.token.size.should eq 0x10
       end
 
       it "lexes hashes" do
         lexer = Lexer.new("\xAD").tap(&.next_token)
 
-        lexer.token.type.should eq :HASH
+        lexer.token.type.should eq Token::Type::Hash
         lexer.token.size.should eq 0x0D
 
         lexer = Lexer.new("\xD8\x80").tap(&.next_token)
-        lexer.token.type.should eq :HASH
+        lexer.token.type.should eq Token::Type::Hash
         lexer.token.size.should eq 0x80
       end
 
       it "lexes structures" do
         lexer = Lexer.new("\xB1").tap(&.next_token)
 
-        lexer.token.type.should eq :STRUCTURE
+        lexer.token.type.should eq Token::Type::Structure
         lexer.token.size.should eq 1
 
         lexer = Lexer.new("\xDC\x80").tap(&.next_token)
-        lexer.token.type.should eq :STRUCTURE
+        lexer.token.type.should eq Token::Type::Structure
         lexer.token.size.should eq 0x80
       end
     end

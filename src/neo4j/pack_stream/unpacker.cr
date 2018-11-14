@@ -24,13 +24,13 @@ module Neo4j
 
       def read_nil
         next_token
-        check :nil
+        check Token::Type::Null
         nil
       end
 
       def read_nil_or
         token = prefetch_token
-        if token.type == :nil
+        if token.type.null?
           token.used = true
           nil
         else
@@ -41,9 +41,9 @@ module Neo4j
       def read_bool
         next_token
         case token.type
-        when :true
+        when .true?
           true
-        when :false
+        when .false?
           false
         else
           unexpected_token
@@ -53,26 +53,26 @@ module Neo4j
       def read_numeric
         next_token
         case token.type
-        when :INT
+        when .int?
           token.int_value
-        when :FLOAT
+        when .float?
           token.float_value
         else
           unexpected_token
         end
       end
 
-      {% for type in %w(int uint float string binary) %}
-        def read_{{type.id}}                          # def read_int
-          next_token
-          check :{{type.id.upcase}}                   #   check :INT
-          token.{{type.id}}_value                     #   token.int_value
-        end                                           # end
+      {% for type in %w(Int Float String) %}
+        def read_{{type.id.downcase}}      # def read_int
+          next_token                       #   next_token
+          check Token::Type::{{type.id}}   #   check Token::Type::Int
+          token.{{type.id.downcase}}_value #   token.int_value
+        end                                # end
       {% end %}
 
       def read_array(fetch_next_token = true)
         next_token if fetch_next_token
-        check :ARRAY
+        check Token::Type::Array
         Array(Type).new(token.size.to_i32) do
           read_value
         end
@@ -80,7 +80,7 @@ module Neo4j
 
       def read_hash(read_key = true, fetch_next_token = true)
         next_token if fetch_next_token
-        check :HASH
+        check Token::Type::Hash
         token.size.times do
           if read_key
             key = read_value
@@ -93,7 +93,7 @@ module Neo4j
 
       def read_hash(fetch_next_token = true)
         next_token if fetch_next_token
-        check :HASH
+        check Token::Type::Hash
         hash = Hash(String, Type).new(initial_capacity: token.size.to_i32)
         token.size.times do
           key = read_string
@@ -105,7 +105,7 @@ module Neo4j
 
       def read_structure(fetch_next_token = true)
         next_token if fetch_next_token
-        check :STRUCTURE
+        check Token::Type::Structure
 
         structure_type = read_value
 
@@ -159,7 +159,7 @@ module Neo4j
       def read_structure(fetch_next_token = true)
         next_token if fetch_next_token
 
-        check :STRUCTURE
+        check Token::Type::Structure
         token.size.times { yield }
       end
 
@@ -167,23 +167,23 @@ module Neo4j
         next_token
 
         case token.type
-        when :INT
+        when .int?
           token.int_value
-        when :FLOAT
+        when .float?
           token.float_value
-        when :STRING
+        when .string?
           token.string_value
-        when :nil
+        when .null?
           nil
-        when :true
+        when .true?
           true
-        when :false
+        when .false?
           false
-        when :ARRAY
+        when .array?
           read_array fetch_next_token: false
-        when :HASH
+        when .hash?
           read_hash fetch_next_token: false
-        when :STRUCTURE
+        when .structure?
           read_structure fetch_next_token: false
         else
           unexpected_token token.type
