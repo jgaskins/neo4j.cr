@@ -3,16 +3,16 @@ require "./lexer"
 module Neo4j
   module PackStream
     struct Unpacker
-      STRUCTURE_TYPES = {
-        node: 0x4e,
-        relationship: 0x52,
-        path: 0x50,
-        unbound_relationship: 0x72,
-        success: 0x70,
-        failure: 0x7f,
-        ignored: 0x7e,
-        record: 0x71,
-      }
+      enum StructureTypes : Int8
+        Node                = 0x4e
+        Relationship        = 0x52
+        Path                = 0x50
+        UnboundRelationship = 0x72
+        Success             = 0x70
+        Failure             = 0x7f
+        Ignored             = 0x7e
+        Record              = 0x71
+      end
 
       def initialize(string_or_io)
         @lexer = Lexer.new(string_or_io)
@@ -110,14 +110,14 @@ module Neo4j
         structure_type = read_value
 
         case structure_type
-        when STRUCTURE_TYPES[:node]
+        when StructureTypes::Node.value
           id = read_numeric.to_i32
           labels = read_array.map(&.to_s)
           props = read_hash
             .each_with_object({} of String => Type) { |(k, v), h|
               h[k.to_s] = v }
           Node.new(id, labels, props)
-        when STRUCTURE_TYPES[:relationship]
+        when StructureTypes::Relationship.value
           Relationship.new(
             id: read_numeric.to_i32,
             start: read_numeric.to_i32,
@@ -127,13 +127,13 @@ module Neo4j
               .each_with_object({} of String => Type) { |(k, v), h|
                 h[k.to_s] = v }
           )
-        when STRUCTURE_TYPES[:path]
+        when StructureTypes::Path.value
           Path.new(
             nodes: read_array.map { |node| node.as(Node) },
             relationships: read_array.map(&.as(UnboundRelationship)),
             sequence: read_array.map(&.as(Int8)),
           )
-        when STRUCTURE_TYPES[:unbound_relationship]
+        when StructureTypes::UnboundRelationship.value
           UnboundRelationship.new(
             id: read_numeric.to_i32,
             type: read_string,
@@ -141,13 +141,13 @@ module Neo4j
               .each_with_object({} of String => Type) { |(k, v), h|
                 h[k.to_s] = v }
           )
-        when STRUCTURE_TYPES[:success]
+        when StructureTypes::Success.value
           Success.new(read_hash)
-        when STRUCTURE_TYPES[:failure]
+        when StructureTypes::Failure.value
           Failure.new(read_hash)
-        when STRUCTURE_TYPES[:ignored]
+        when StructureTypes::Ignored.value
           Ignored.new
-        when STRUCTURE_TYPES[:record]
+        when StructureTypes::Record.value
           read_value
         else
           Array(Type).new(token.size) do
