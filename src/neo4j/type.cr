@@ -95,6 +95,7 @@ module Neo4j
     Float64 |
     Array(Type) |
     Hash(String, Type) |
+    Time |
     Node |
     Relationship |
     UnboundRelationship |

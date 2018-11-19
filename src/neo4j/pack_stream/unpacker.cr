@@ -12,6 +12,14 @@ module Neo4j
         failure: 0x7f,
         ignored: 0x7e,
         record: 0x71,
+
+        # All the date/time-related types
+        datetime: 0x46,
+        localdatetime: 0x64,
+        date: 0x44,
+        localtime: 0x74,
+        time: 0x54,
+        duration: 0x45,
       }
 
       def initialize(string_or_io)
@@ -149,6 +157,25 @@ module Neo4j
           Ignored.new
         when STRUCTURE_TYPES[:record]
           read_value
+
+        # Date/time types
+        when STRUCTURE_TYPES[:datetime]
+          time = Time.unix(read_int) + read_int.nanoseconds
+          offset = read_int.to_i32
+          (time - offset.seconds).in(Time::Location.fixed(offset))
+        when STRUCTURE_TYPES[:localdatetime]
+          Time.unix(read_int) + read_int.nanoseconds
+        when STRUCTURE_TYPES[:date]
+          Time::UNIX_EPOCH + read_int.days
+        when STRUCTURE_TYPES[:localtime]
+          Time::UNIX_EPOCH + read_int.nanoseconds
+        when STRUCTURE_TYPES[:time]
+          time = Time::UNIX_EPOCH + read_int.nanoseconds
+          offset = read_int.to_i32
+          (time - offset.seconds).in(Time::Location.fixed(offset))
+        # TODO: Figure out how to represent Time::Span and Time::MonthSpan in the same object
+        # when STRUCTURE_TYPES[:duration]
+        #   Time::Span.new(months: read_int, days: read_int, seconds: read_int, nanoseconds: read_int)
         else
           Array(Type).new(token.size) do
             read_value
