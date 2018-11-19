@@ -11,7 +11,7 @@ module Neo4j
     class Connection
       GOGOBOLT = "\x60\x60\xB0\x17"
       SUPPORTED_VERSIONS = String.new(Bytes[
-        0, 0, 0, 1,
+        0, 0, 0, 2,
         0, 0, 0, 0,
         0, 0, 0, 0,
         0, 0, 0, 0,
