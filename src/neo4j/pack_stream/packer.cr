@@ -185,6 +185,13 @@ module Neo4j
         self
       end
 
+      def write(time : Time)
+        write_byte 0x64
+        write_value time.to_unix
+        write_value time.nanosecond
+        self
+      end
+
       def write(node : Node)
         write_byte(0x4E)
         write_value node.id
