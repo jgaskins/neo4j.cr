@@ -14,4 +14,7 @@ module Neo4j
       super "#{message} [#{code}]"
     end
   end
+
+  class RollbackException < Exception
+  end
 end

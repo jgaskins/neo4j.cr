@@ -2,6 +2,7 @@ require "../type"
 require "../pack_stream"
 require "../pack_stream/packer"
 require "../result"
+require "./transaction"
 
 require "socket"
 require "openssl"
@@ -25,6 +26,7 @@ module Neo4j
       }
 
       @connection : (TCPSocket | OpenSSL::SSL::Socket::Client)
+      @transaction : Transaction?
 
       def initialize
         initialize "bolt://neo4j:neo4j@localhost:7687", ssl: false
@@ -68,7 +70,11 @@ module Neo4j
       end
 
       def execute(query, parameters : Hash(String, Type))
-        Result.new(type: run(query, parameters), data: pull_all)
+        if @transaction
+          Result.new(type: run(query, parameters), data: pull_all)
+        else
+          transaction { execute query, parameters }
+        end
       end
 
       def execute(query, **params)
@@ -80,20 +86,23 @@ module Neo4j
       end
 
       def transaction
+        @transaction = Transaction.new(self)
+
         execute "BEGIN"
-
-        yield
-
-        execute "COMMIT"
+        yield(@transaction.not_nil!).tap { execute "COMMIT" }
+      rescue RollbackException
+        execute "ROLLBACK"
       rescue e : QueryException
         ack_failure
-        run "ROLLBACK"
+        execute "ROLLBACK"
         reset
         raise e
       rescue e # Don't ack_failure if it wasn't a QueryException
-        run "ROLLBACK"
+        execute "ROLLBACK"
         reset
         raise e
+      ensure
+        @transaction = nil
       end
 
       def close

@@ -65,6 +65,85 @@ module Neo4j
             CYPHER
           end
         end
+
+        it "handles exceptions" do
+          pool.connection do |connection|
+            begin
+              connection.execute "omg lol"
+            rescue Neo4j::QueryException
+              # we did this on purpose
+            end
+
+            result = connection.execute "return 42"
+
+            result.first.first.should eq 42
+          end
+        end
+
+        describe "transactions" do
+          it "yields a transaction" do
+            pool.connection do |connection|
+              begin
+                connection.transaction do |t|
+                  t.should be_a Transaction
+
+                  # Provides the same execute API as the connection
+                  result = t.execute "RETURN $value", value: 42
+                  result.first.first.should eq 42
+
+                  result = t.execute "RETURN $value", { "value" => 42 }
+                  result.first.first.should eq 42
+                end
+
+                # Without the block param
+                connection.transaction do
+                  result = connection.execute "RETURN 42"
+                  result.first.first.should eq 42
+                end
+              end
+            end
+          end
+
+          it "rolls back the transaction if an error occurs" do
+            pool.connection do |connection|
+              id = nil
+
+              begin
+                connection.transaction do |t|
+                  # Initial query whose result should not exist outside this
+                  # block after our exception below.
+                  id = t
+                    .execute("CREATE (u:User) RETURN ID(u)")
+                    .first
+                    .first
+
+                  t.execute "break everything please"
+                end
+              rescue ex : QueryException
+              end
+
+              id.should_not be_nil
+
+              result = connection.execute "MATCH (u) WHERE ID(u) = $id RETURN u", id: id
+              result.any?.should be_false
+            end # connection
+          end # it rolls back
+
+          it "allows you to roll back a transaction explicitly" do
+            pool.connection do |connection|
+              connection.transaction do |t|
+                id = t
+                  .execute("CREATE (u:User) RETURN ID(u)")
+                  .first
+                  .first
+
+                t.rollback
+
+                raise "This should never run"
+              end
+            end
+          end
+        end
       end
     end
   end
