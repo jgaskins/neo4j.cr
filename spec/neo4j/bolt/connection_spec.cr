@@ -143,6 +143,18 @@ module Neo4j
               end
             end
           end
+
+          it "does not allow nested transactions" do
+            pool.connection do |connection|
+              expect_raises NestedTransactionError do
+                connection.transaction do |t|
+                  connection.transaction do |t2|
+                    raise "We should never be able to enter this block"
+                  end
+                end
+              end
+            end
+          end
         end
       end
     end

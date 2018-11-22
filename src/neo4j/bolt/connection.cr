@@ -86,12 +86,21 @@ module Neo4j
       end
 
       def transaction
+        if @transaction
+          raise NestedTransactionError.new("Transaction already open, cannot open a new transaction")
+        end
+
         @transaction = Transaction.new(self)
 
         execute "BEGIN"
         yield(@transaction.not_nil!).tap { execute "COMMIT" }
       rescue RollbackException
         execute "ROLLBACK"
+      rescue e : NestedTransactionError
+        # We don't want a NestedTransactionError to be picked up by the
+        # catch-all rescue below, so we're explicitly capturing and re-raising
+        # here to bypass it
+        raise e
       rescue e : QueryException
         ack_failure
         execute "ROLLBACK"

@@ -17,4 +17,7 @@ module Neo4j
 
   class RollbackException < Exception
   end
+
+  class NestedTransactionError < Exception
+  end
 end
