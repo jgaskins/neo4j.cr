@@ -1,3 +1,5 @@
+require "./type"
+
 module Neo4j
   macro map_relationship(**__properties__)
     ::Neo4j.map_relationship({{__properties__}})
