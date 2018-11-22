@@ -1,1 +1,3 @@
 language: crystal
+services:
+  - neo4j
