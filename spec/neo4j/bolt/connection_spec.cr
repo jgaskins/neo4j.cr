@@ -4,6 +4,16 @@ require "pool/connection"
 
 require "../../../../src/neo4j/bolt/connection"
 
+# Specs in this file which hit the database are invoked with `async_it` which
+# wraps the spec inside a fiber. This lets them execute concurrently. This is
+# also the reason we use a connection pool. The capacity of the pool is 25
+# connections, so we can execute up to 25 specs at a time.
+
+# Concurrent specs here were an experiment and aren't really used for real
+# performance gains in spec running, but it's a decent proof of concept for
+# running concurrent specs in a real app. See spec_helper.cr for the
+# implementation.
+
 module Neo4j
   module Bolt
     run_integration_specs = ENV["NEO4J_URL"]?
@@ -16,7 +26,7 @@ module Neo4j
       end
 
       describe Connection do
-        it "talks to a real DB" do
+        async_it "talks to a real DB" do
           uuid = UUID.random.to_s
           pool.connection do |connection|
             connection.execute <<-CYPHER, uuid: uuid, name: "Hello world"
@@ -42,7 +52,7 @@ module Neo4j
           end
         end
 
-        it "handles nodes and relationships" do
+        async_it "handles nodes and relationships" do
           user_id = UUID.random.to_s
           group_id = UUID.random.to_s
           now = Time.now.to_unix
@@ -63,6 +73,97 @@ module Neo4j
               MATCH (user:User { id: $user_id })-[membership:MEMBER_OF]->(group:Group { id: $group_id })
               DELETE user, membership, group
             CYPHER
+          end
+        end
+
+        async_it "handles exceptions" do
+          pool.connection do |connection|
+            begin
+              connection.execute "omg lol"
+            rescue Neo4j::QueryException
+              # we did this on purpose
+            end
+
+            result = connection.execute "return 42"
+
+            result.first.first.should eq 42
+          end
+        end
+
+        describe "transactions" do
+          async_it "yields a transaction" do
+            pool.connection do |connection|
+              begin
+                connection.transaction do |t|
+                  t.should be_a Transaction
+
+                  # Provides the same execute API as the connection
+                  result = t.execute "RETURN $value", value: 42
+                  result.first.first.should eq 42
+
+                  result = t.execute "RETURN $value", { "value" => 42 }
+                  result.first.first.should eq 42
+                end
+
+                # Without the block param
+                connection.transaction do
+                  result = connection.execute "RETURN 42"
+                  result.first.first.should eq 42
+                end
+              end
+            end
+          end
+
+          async_it "rolls back the transaction if an error occurs" do
+            pool.connection do |connection|
+              id = nil
+
+              begin
+                connection.transaction do |t|
+                  # Initial query whose result should not exist outside this
+                  # block after our exception below.
+                  id = t
+                    .execute("CREATE (u:User) RETURN ID(u)")
+                    .first
+                    .first
+
+                  t.execute "break everything please"
+                end
+              rescue ex : QueryException
+              end
+
+              id.should_not be_nil
+
+              result = connection.execute "MATCH (u) WHERE ID(u) = $id RETURN u", id: id
+              result.any?.should be_false
+            end # connection
+          end # it rolls back
+
+          async_it "allows you to roll back a transaction explicitly" do
+            pool.connection do |connection|
+              connection.transaction do |t|
+                id = t
+                  .execute("CREATE (u:User) RETURN ID(u)")
+                  .first
+                  .first
+
+                t.rollback
+
+                raise "This should never run"
+              end
+            end
+          end
+
+          async_it "does not allow nested transactions" do
+            pool.connection do |connection|
+              expect_raises NestedTransactionError do
+                connection.transaction do |t|
+                  connection.transaction do |t2|
+                    raise "We should never be able to enter this block"
+                  end
+                end
+              end
+            end
           end
         end
       end
