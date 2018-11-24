@@ -97,9 +97,10 @@ module Neo4j
       rescue RollbackException
         execute "ROLLBACK"
       rescue e : NestedTransactionError
-        # We don't want a NestedTransactionError to be picked up by the
+        # We don't want our NestedTransactionError to be picked up by the
         # catch-all rescue below, so we're explicitly capturing and re-raising
         # here to bypass it
+        reset
         raise e
       rescue e : QueryException
         ack_failure

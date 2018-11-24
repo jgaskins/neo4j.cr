@@ -37,35 +37,9 @@ module Neo4j
         self
       end
 
-      def write_binary_start(bytesize)
-        case bytesize
-        when (0x0000..0xFF)
-          # bin8
-          write_byte(0xC4)
-          write_value(bytesize.to_u8)
-        when (0x0000..0xFFFF)
-          # bin16
-          write_byte(0xC5)
-          write_value(bytesize.to_u16)
-        when (0x0000_0000..0xFFFF_FFFF)
-          # bin32
-          write_byte(0xC6)
-          write_value(bytesize.to_u32)
-        else
-          raise Error.new("invalid length")
-        end
-        self
-      end
-
       def write(value : String)
         write_string_start(value.bytesize)
         write_slice(value.to_slice)
-        self
-      end
-
-      def write(value : Bytes)
-        write_binary_start(value.bytesize)
-        write_slice(value)
         self
       end
 
@@ -146,7 +120,7 @@ module Neo4j
 
       def write(value : Array)
         write_array_start(value.size)
-        value.each { |item| self.write(item) }
+        value.each { |item| write(item) }
         self
       end
 
@@ -186,25 +160,56 @@ module Neo4j
       end
 
       def write(time : Time)
+        write_structure_start 2
         write_byte 0x64
         write_value time.to_unix
         write_value time.nanosecond
         self
       end
 
+      def write(point : Point2D)
+        write_structure_start 3
+        write_byte Unpacker::STRUCTURE_TYPES[:point2d]
+        write 7203_i16
+        write point.x
+        write point.y
+        self
+      end
+
+      def write(point : Point3D)
+        write_structure_start 4
+        write_byte Unpacker::STRUCTURE_TYPES[:point3d]
+        write 9157_i16
+        write point.x
+        write point.y
+        write point.z
+        self
+      end
+
+      def write(latlng : LatLng)
+        write_structure_start 3
+        write_byte Unpacker::STRUCTURE_TYPES[:point2d]
+        write 4326_i16
+        write latlng.longitude
+        write latlng.latitude
+        self
+      end
+
       def write(node : Node)
-        write_byte(0x4E)
-        write_value node.id
+        write_structure_start 3
+        write_byte Unpacker::STRUCTURE_TYPES[:node]
+        write node.id
         write node.labels
         write node.properties
         self
       end
 
       def write(rel : Relationship)
+        write_structure_start 5
         write_byte 0x52
-        write_value rel.id
-        write_value rel.start
-        write_value rel.end
+        write rel.id
+        write rel.start
+        write rel.end
         write rel.type
         write rel.properties
         self

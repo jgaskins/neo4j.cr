@@ -20,6 +20,10 @@ module Neo4j
         localtime: 0x74,
         time: 0x54,
         duration: 0x45,
+
+        # Points
+        point2d: 0x58,
+        point3d: 0x59,
       }
 
       def initialize(string_or_io)
@@ -150,6 +154,22 @@ module Neo4j
           time = Time::UNIX_EPOCH + read_int.nanoseconds
           offset = read_int.to_i32
           (time - offset.seconds).in(Time::Location.fixed(offset))
+        when STRUCTURE_TYPES[:point2d]
+          type = read_int.to_i16
+          case type
+          when 7203
+            Point2D.new(type: type, x: read_float, y: read_float)
+          when 4326
+            LatLng.new(type: type, longitude: read_float, latitude: read_float)
+          end
+        when STRUCTURE_TYPES[:point3d]
+          Point3D.new(
+            type: read_int.to_i16,
+            x: read_float,
+            y: read_float,
+            z: read_float,
+          )
+
         # TODO: Figure out how to represent Time::Span and Time::MonthSpan in the same object
         # when STRUCTURE_TYPES[:duration]
         #   Time::Span.new(months: read_int, days: read_int, seconds: read_int, nanoseconds: read_int)

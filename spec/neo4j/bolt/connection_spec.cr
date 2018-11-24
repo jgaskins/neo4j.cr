@@ -166,6 +166,23 @@ module Neo4j
             end
           end
         end
+
+        async_it "deserializes values" do
+          pool.connection do |connection|
+            connection.execute(<<-CYPHER).first.tap do |(datetime, point2d, latlng, point3d)|
+              RETURN
+                datetime(),
+                point({ x: 1, y: 2 }),
+                point({ latitude: 39, longitude: -76 }),
+                point({ x: 1, y: 2, z: 3 })
+            CYPHER
+              datetime.should be_a Time
+              point2d.should eq Point2D.new(x: 1, y: 2)
+              point3d.should eq Point3D.new(x: 1, y: 2, z: 3)
+              latlng.should eq LatLng.new(latitude: 39, longitude: -76)
+            end
+          end
+        end
       end
     end
   end
