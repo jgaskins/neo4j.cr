@@ -85,6 +85,29 @@ module Neo4j
   struct Ignored
   end
 
+  struct Point2D
+    getter x, y, type
+
+    def initialize(@x : Float64, @y : Float64, @type : Int16 = 7203_i16)
+    end
+  end
+
+  struct Point3D
+    getter x, y, z, type
+
+    def initialize(@x : Float64, @y : Float64, @z : Float64, @type : Int16 = 9157_i16)
+    end
+  end
+
+  struct LatLng
+    getter latitude : Float64
+    getter longitude : Float64
+    getter type : Int16
+
+    def initialize(@latitude : Float64, @longitude : Float64, @type = 4326_i16)
+    end
+  end
+
   alias Type = Nil |
     Bool |
     String |
@@ -96,6 +119,9 @@ module Neo4j
     Array(Type) |
     Hash(String, Type) |
     Time |
+    Point2D |
+    Point3D |
+    LatLng |
     Node |
     Relationship |
     UnboundRelationship |

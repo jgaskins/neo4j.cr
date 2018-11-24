@@ -26,7 +26,7 @@ module Neo4j
       end
 
       describe Connection do
-        async_it "talks to a real DB" do
+        it "talks to a real DB" do
           uuid = UUID.random.to_s
           pool.connection do |connection|
             connection.execute <<-CYPHER, uuid: uuid, name: "Hello world"
@@ -52,7 +52,7 @@ module Neo4j
           end
         end
 
-        async_it "handles nodes and relationships" do
+        it "handles nodes and relationships" do
           user_id = UUID.random.to_s
           group_id = UUID.random.to_s
           now = Time.now.to_unix
@@ -76,7 +76,7 @@ module Neo4j
           end
         end
 
-        async_it "handles exceptions" do
+        it "handles exceptions" do
           pool.connection do |connection|
             begin
               connection.execute "omg lol"
@@ -91,7 +91,7 @@ module Neo4j
         end
 
         describe "transactions" do
-          async_it "yields a transaction" do
+          it "yields a transaction" do
             pool.connection do |connection|
               begin
                 connection.transaction do |t|
@@ -114,7 +114,7 @@ module Neo4j
             end
           end
 
-          async_it "rolls back the transaction if an error occurs" do
+          it "rolls back the transaction if an error occurs" do
             pool.connection do |connection|
               id = nil
 
@@ -139,7 +139,7 @@ module Neo4j
             end # connection
           end # it rolls back
 
-          async_it "allows you to roll back a transaction explicitly" do
+          it "allows you to roll back a transaction explicitly" do
             pool.connection do |connection|
               connection.transaction do |t|
                 id = t
@@ -154,7 +154,7 @@ module Neo4j
             end
           end
 
-          async_it "does not allow nested transactions" do
+          it "does not allow nested transactions" do
             pool.connection do |connection|
               expect_raises NestedTransactionError do
                 connection.transaction do |t|
@@ -163,6 +163,23 @@ module Neo4j
                   end
                 end
               end
+            end
+          end
+        end
+
+        it "deserializes values" do
+          pool.connection do |connection|
+            connection.execute(<<-CYPHER).first.tap do |(datetime, point2d, latlng, point3d)|
+              RETURN
+                datetime(),
+                point({ x: 1, y: 2 }),
+                point({ latitude: 39, longitude: -76 }),
+                point({ x: 1, y: 2, z: 3 })
+            CYPHER
+              datetime.should be_a Time
+              point2d.should eq Point2D.new(x: 1, y: 2)
+              point3d.should eq Point3D.new(x: 1, y: 2, z: 3)
+              latlng.should eq LatLng.new(latitude: 39, longitude: -76)
             end
           end
         end

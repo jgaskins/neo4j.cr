@@ -4,21 +4,29 @@ module Neo4j
   module PackStream
     struct Unpacker
       enum StructureTypes : Int8
+        # Primitive Types
         Node                = 0x4e
         Relationship        = 0x52
         Path                = 0x50
         UnboundRelationship = 0x72
+        Record              = 0x71
+
+        # Result Types
         Success             = 0x70
         Failure             = 0x7f
         Ignored             = 0x7e
-        Record              = 0x71
 
+        # Temporal Types
         DateTime            = 0x46
         LocalDateTime       = 0x64
         Date                = 0x44
         LocalTime           = 0x74
         Time                = 0x54
         Duration            = 0x45
+
+        # Spatial Types
+        Point2D             = 0x58
+        Point3D             = 0x59
       end
 
       def initialize(string_or_io)
@@ -149,6 +157,22 @@ module Neo4j
           time = Time::UNIX_EPOCH + read_int.nanoseconds
           offset = read_int.to_i32
           (time - offset.seconds).in(Time::Location.fixed(offset))
+        when StructureTypes::Point2D.value
+          type = read_int.to_i16
+          case type
+          when 7203
+            Point2D.new(type: type, x: read_float, y: read_float)
+          when 4326
+            LatLng.new(type: type, longitude: read_float, latitude: read_float)
+          end
+        when StructureTypes::Point3D.value
+          Point3D.new(
+            type: read_int.to_i16,
+            x: read_float,
+            y: read_float,
+            z: read_float,
+          )
+
         # TODO: Figure out how to represent Time::Span and Time::MonthSpan in the same object
         # when STRUCTURE_TYPES[:duration]
         #   Time::Span.new(months: read_int, days: read_int, seconds: read_int, nanoseconds: read_int)
