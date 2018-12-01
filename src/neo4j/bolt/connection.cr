@@ -17,13 +17,13 @@ module Neo4j
         0, 0, 0, 0,
         0, 0, 0, 0,
       ])
-      COMMANDS = {
-        init: 0x01,
-        run: 0x10,
-        pull_all: 0x3F,
-        ack_failure: 0x0E,
-        reset: 0x0F,
-      }
+      enum Commands
+        Init       = 0x01
+        Run        = 0x10
+        PullAll    = 0x3F
+        AckFailure = 0x0E
+        Reset      = 0x0F
+      end
 
       @connection : (TCPSocket | OpenSSL::SSL::Socket::Client)
       @transaction : Transaction?
@@ -124,7 +124,7 @@ module Neo4j
       def reset
         write_message do |msg|
           msg.write_structure_start 0
-          msg.write_byte COMMANDS[:reset]
+          msg.write_byte Commands::Reset
         end
         read_result
       end
@@ -132,7 +132,7 @@ module Neo4j
       private def init(username, password)
         write_message do |msg|
           msg.write_structure_start 1
-          msg.write_byte COMMANDS[:init]
+          msg.write_byte Commands::Init
           msg.write "Neo4j.cr/0.1.0"
           msg.write({
             "scheme" => "basic",
@@ -170,7 +170,7 @@ module Neo4j
       private def run(statement, parameters = {} of String => Type)
         write_message do |msg|
           msg.write_structure_start 2
-          msg.write_byte COMMANDS[:run]
+          msg.write_byte Commands::Run
           msg.write statement
           msg.write parameters
         end
@@ -192,7 +192,7 @@ module Neo4j
       private def pull_all
         write_message do |msg|
           msg.write_structure_start 0
-          msg.write_byte COMMANDS[:pull_all]
+          msg.write_byte Commands::PullAll
         end
 
         results = Array(Array(Type)).new
@@ -256,7 +256,7 @@ module Neo4j
       private def ack_failure
         write_message do |msg|
           msg.write_structure_start 0
-          msg.write_byte COMMANDS[:ack_failure]
+          msg.write_byte Commands::AckFailure
         end
         read_result
       end
