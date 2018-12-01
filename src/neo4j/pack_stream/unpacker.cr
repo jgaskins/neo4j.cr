@@ -28,16 +28,6 @@ module Neo4j
         nil
       end
 
-      def read_nil_or
-        token = prefetch_token
-        if token.type.null?
-          token.used = true
-          nil
-        else
-          yield
-        end
-      end
-
       def read_bool
         next_token
         case token.type
@@ -75,19 +65,6 @@ module Neo4j
         check Token::Type::Array
         Array(Type).new(token.size.to_i32) do
           read_value
-        end
-      end
-
-      def read_hash(read_key = true, fetch_next_token = true)
-        next_token if fetch_next_token
-        check Token::Type::Hash
-        token.size.times do
-          if read_key
-            key = read_value
-            yield key
-          else
-            yield nil
-          end
         end
       end
 
