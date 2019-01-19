@@ -131,7 +131,7 @@ module Neo4j
           write_byte(0xA0 + length)
         when (0x00..0xFF)
           write_byte(0xD8)
-          write_value(length.to_u16)
+          write_value(length.to_u8)
         when (0x0000..0xFFFF)
           write_byte(0xD9)
           write_value(length.to_u16)
