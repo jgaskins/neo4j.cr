@@ -5,7 +5,7 @@ require "../../../../src/neo4j/pack_stream"
 module Neo4j
   module PackStream
     describe Packer do
-      it "jhgf" do
+      it "serializes hashes over 4 bits in length" do
         hash = {
           key_00: "value",
           key_01: "value",
