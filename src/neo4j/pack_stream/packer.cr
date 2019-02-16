@@ -95,9 +95,7 @@ module Neo4j
             write_value(value.to_u64)
           end
         else
-          if -0x20.to_i8 <= value
-            write_byte(value.to_i8)
-          elsif Int8::MIN <= value
+          if Int8::MIN <= value
             write_byte(0xC8)
             write_byte(value.to_i8)
           elsif Int16::MIN <= value

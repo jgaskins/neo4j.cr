@@ -28,6 +28,43 @@ module Neo4j
 
         unpack(pack(hash)).should eq hash
       end
+
+      {
+        0_i8,
+        -1_i8,
+        -17_i8,
+        1_i8,
+        Int8::MAX,
+        Int8::MIN,
+
+        0_i16,
+        -1_i16,
+        1_i16,
+        Int8::MIN.to_i16 - 1,
+        Int8::MAX.to_i16 + 1,
+        Int16::MIN,
+        Int16::MAX,
+
+        0_i32,
+        -1_i32,
+        1_i32,
+        Int16::MIN.to_i32 - 1,
+        Int16::MAX.to_i32 + 1,
+        Int32::MIN,
+        Int32::MAX,
+
+        0__i64,
+        -1_i64,
+        1__i64,
+        Int32::MIN.to_i64 - 1,
+        Int32::MAX.to_i64 + 1,
+        Int64::MIN,
+        Int64::MAX,
+      }.each do |int|
+        it "serializes #{int}" do
+          unpack(pack(int)).should eq int
+        end
+      end
     end
   end
 end
