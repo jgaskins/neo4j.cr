@@ -4,16 +4,6 @@ require "pool/connection"
 
 require "../../../../src/neo4j/bolt/connection"
 
-# Specs in this file which hit the database are invoked with `async_it` which
-# wraps the spec inside a fiber. This lets them execute concurrently. This is
-# also the reason we use a connection pool. The capacity of the pool is 25
-# connections, so we can execute up to 25 specs at a time.
-
-# Concurrent specs here were an experiment and aren't really used for real
-# performance gains in spec running, but it's a decent proof of concept for
-# running concurrent specs in a real app. See spec_helper.cr for the
-# implementation.
-
 module Neo4j
   module Bolt
     run_integration_specs = ENV["NEO4J_URL"]?
