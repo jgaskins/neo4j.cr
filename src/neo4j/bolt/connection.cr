@@ -69,6 +69,35 @@ module Neo4j
         init username, password
       end
 
+      def stream(query, parameters = Hash(String, Type).new)
+        StreamingResult.new(
+          type: run(query, parameters),
+          data: stream_results,
+        )
+      end
+
+      def stream_results
+        write_message do |msg|
+          msg.write_structure_start 0
+          msg.write_byte Commands::PullAll
+        end
+        results = StreamingResultSet.new
+
+        spawn do
+          result = read_result
+
+          until result.is_a?(Success) || result.is_a?(Ignored)
+            results << result.as(Array(Type))
+            result = read_result
+          end
+          results.complete!
+
+          result
+        end
+
+        results
+      end
+
       def execute(query, parameters : Hash(String, Type))
         if @transaction
           Result.new(type: run(query, parameters), data: pull_all)
@@ -198,17 +227,10 @@ module Neo4j
 
         results = Array(Array(Type)).new
         result = read_result
-        if result.is_a? Failure
-          raise ::Neo4j::QueryException.new(result.attrs["message"].as(String), result.attrs["code"].as(String))
-        end
 
         until result.is_a?(Success) || result.is_a?(Ignored)
           results << result.as(Array(Type))
           result = read_result
-
-          if result.is_a? Failure
-            raise ::Neo4j::QueryException.new(result.attrs["message"].as(String), result.attrs["code"].as(String))
-          end
         end
 
         results
@@ -238,7 +260,11 @@ module Neo4j
           bytes + current_byte
         end
 
-        PackStream.unpack(bytes)
+        PackStream.unpack(bytes).tap do |result|
+          if result.is_a? Failure
+            raise ::Neo4j::QueryException.new(result.attrs["message"].as(String), result.attrs["code"].as(String))
+          end
+        end
       end
 
       private def write(value)
@@ -268,6 +294,72 @@ module Neo4j
 
       private def send_message(bytes : Bytes)
         @connection.write bytes
+      end
+    end
+  end
+
+  alias Row = Array(Type)
+  class StreamingResultSet
+    include Iterable(Row)
+
+    def initialize
+      @iterator = Iterator.new
+      @complete = false
+    end
+
+    def <<(value : Row) : self
+      @iterator.channel.send value
+      self
+    end
+
+    def each
+      @iterator
+    end
+
+    def each(&block : Row ->)
+      while !@complete && (value = @iterator.next)
+        yield value
+      end
+    end
+
+    def complete!
+      @complete = true
+    end
+
+    class Iterator
+      include ::Iterator(Row)
+
+      getter channel
+
+      def initialize
+        @channel = Channel(Row).new(1)
+      end
+
+      def next
+        @channel.receive
+      end
+    end
+  end
+
+  class StreamingResult
+    include Iterable(Row)
+    include Enumerable(Row)
+
+    getter type, data
+
+    def initialize(
+      @type : Success | Ignored,
+      @data : Iterable(Row),
+    )
+    end
+
+    def each
+      @data.each
+    end
+
+    def each(&block : Row ->)
+      each.each do |row|
+        yield row
       end
     end
   end
