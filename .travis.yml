@@ -1,3 +1,6 @@
 language: crystal
-services:
-  - neo4j
+before_install:
+  - sudo apt-get update
+  - sudo apt-get install neo4j
+  - sudo service neo4j start
+  - while [ $? -ne 0 ]; do; curl -I http://localhost:7474 |head -1 | grep 200; done
