@@ -166,6 +166,28 @@ module Neo4j
             end
           end
         end
+
+        it "streams results" do
+          pool.connection do |connection|
+            connection.transaction do |txn|
+              connection.execute "MATCH (test:TestNode) DETACH DELETE test"
+
+              3.times do |id|
+                connection.execute "CREATE (:TestNode { id: $id })", id: id
+              end
+
+              results = connection.stream(<<-CYPHER)
+                MATCH (test:TestNode) RETURN test
+              CYPHER
+
+              results.first # Consumes the first result
+              results.count(&.itself).should eq 2 # So there are 2 left over
+              results.count(&.itself).should eq 0 # Now there are none left
+
+              txn.rollback
+            end
+          end
+        end
       end
     end
   end
