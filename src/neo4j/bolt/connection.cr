@@ -69,6 +69,10 @@ module Neo4j
         init username, password
       end
 
+      def stream(_query, **parameters)
+        stream(_query, parameters.to_h.transform_keys(&.to_s))
+      end
+
       def stream(query, parameters = Hash(String, Type).new)
         StreamingResult.new(
           type: run(query, parameters),
@@ -76,23 +80,25 @@ module Neo4j
         )
       end
 
-      def stream_results
+      private def stream_results
         write_message do |msg|
           msg.write_structure_start 0
           msg.write_byte Commands::PullAll
         end
         results = StreamingResultSet.new
 
-        spawn do
-          result = read_result
-
-          until result.is_a?(Success) || result.is_a?(Ignored)
-            results << result.as(Array(Type))
-            result = read_result
-          end
+        result = read_result
+        case result
+        when Success, Ignored
           results.complete!
-
-          result
+        else
+          spawn do
+            until result.is_a?(Success) || result.is_a?(Ignored)
+              results << result.as(Array(Type))
+              result = read_result
+            end
+            results.complete!
+          end
         end
 
         results
@@ -302,9 +308,10 @@ module Neo4j
   class StreamingResultSet
     include Iterable(Row)
 
+    delegate complete!, to: @iterator
+
     def initialize
       @iterator = Iterator.new
-      @complete = false
     end
 
     def <<(value : Row) : self
@@ -316,16 +323,6 @@ module Neo4j
       @iterator
     end
 
-    def each(&block : Row ->)
-      while !@complete && (value = @iterator.next)
-        yield value
-      end
-    end
-
-    def complete!
-      @complete = true
-    end
-
     class Iterator
       include ::Iterator(Row)
 
@@ -333,10 +330,19 @@ module Neo4j
 
       def initialize
         @channel = Channel(Row).new(1)
+        @complete = false
       end
 
       def next
-        @channel.receive
+        if @complete && @channel.empty?
+          stop
+        else
+          @channel.receive
+        end
+      end
+
+      def complete!
+        @complete = true
       end
     end
   end
@@ -349,7 +355,7 @@ module Neo4j
 
     def initialize(
       @type : Success | Ignored,
-      @data : Iterable(Row),
+      @data : StreamingResultSet,
     )
     end
 
