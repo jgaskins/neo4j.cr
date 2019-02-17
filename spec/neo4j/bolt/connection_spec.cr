@@ -161,12 +161,21 @@ module Neo4j
           pool.connection do |connection|
             connection.execute(<<-CYPHER).first.tap do |(datetime, point2d, latlng, point3d)|
               RETURN
-                datetime(),
+                datetime('2019-02-16T22:32:40.999Z'),
                 point({ x: 1, y: 2 }),
                 point({ latitude: 39, longitude: -76 }),
                 point({ x: 1, y: 2, z: 3 })
             CYPHER
-              datetime.should be_a Time
+              datetime.should eq Time.new(
+                year: 2019,
+                month: 2,
+                day: 16,
+                hour: 22,
+                minute: 32,
+                second: 40,
+                nanosecond: 999_000_000,
+                location: Time::Location.load("UTC"),
+              )
               point2d.should eq Point2D.new(x: 1, y: 2)
               point3d.should eq Point3D.new(x: 1, y: 2, z: 3)
               latlng.should eq LatLng.new(latitude: 39, longitude: -76)

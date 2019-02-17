@@ -81,6 +81,8 @@ module Neo4j
             @{{value[:key_id]}} = Time.parse_iso8601(%property_value)
           when Int
             @{{value[:key_id]}} = Time.unix(%property_value)
+          when Time
+            @{{value[:key_id]}} = %property_value
           {% if value[:nilable] %}
             when Nil
               @{{value[:key_id]}} = %property_value

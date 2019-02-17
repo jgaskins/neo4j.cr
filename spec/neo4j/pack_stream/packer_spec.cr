@@ -1,6 +1,6 @@
 require "../../../spec_helper"
 
-require "../../../src/neo4j/pack_stream/packer"
+require "../../../src/neo4j/pack_stream"
 require "../../../src/neo4j/type"
 
 module Neo4j
@@ -71,6 +71,16 @@ module Neo4j
         Point2D.new(x: 1, y: 2),
         Point3D.new(x: 1, y: 2, z: 3),
         LatLng.new(latitude: 12.34, longitude: 56.78),
+        ::Time.new(
+          year: 2019,
+          month: 2,
+          day: 16,
+          hour: 10,
+          minute: 19,
+          second: 35,
+          nanosecond: 123456789,
+          location: ::Time::Location.load("America/New_York"),
+        ),
         Node.new(
           id: 123,
           labels: ["Foo"],
