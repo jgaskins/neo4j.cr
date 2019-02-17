@@ -2,7 +2,7 @@ language: crystal
 before_install:
   - curl http://debian.neo4j.org/neotechnology.gpg.key | sudo apt-key add -
   - sudo mkdir -p /etc/apt/sources.list.d
-  - sudo (echo 'deb http://debian.neo4j.org/repo stable/' > /etc/apt/sources.list.d/neo4j.list)
+  - sudo echo 'deb http://debian.neo4j.org/repo stable/' > /etc/apt/sources.list.d/neo4j.list
   - sudo apt-get update
   - sudo apt-get install neo4j
   - sudo service neo4j start
