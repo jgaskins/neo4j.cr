@@ -86,6 +86,40 @@ connection.transaction do
 end
 ```
 
+### `stream(query : String, parameters : Hash(String, Neo4j::Type))` _EXPERIMENTAL_
+
+Behaves similar to `execute(query, parameters)`, but the results are streamed rather than evaluated eagerly. For large result sets, this can drastically reduce memory usage and eliminates the need to provide workarounds like [ActiveRecord's `find_each`](https://api.rubyonrails.org/classes/ActiveRecord/Batches.html#method-i-find_each) method.
+
+Example:
+
+```crystal
+struct User
+  Neo4j.map_node(
+    id: UUID,
+    email: String,
+    name: String,
+    created_at: Time,
+  )
+end
+
+connection
+  .stream("MATCH (user:User) RETURN user")
+  .each
+  .map { |(user_node)| User.new(user_node.as(Neo4j::Node)) }
+```
+
+In this example, the driver will not retrieve a result from the connection until it is needed. In many cases, this reduces memory consumption as the values returned from the database are not all stored in memory at once. Consider the eager version:
+
+```crystal
+connection
+  .execute("MATCH (user:User) RETURN user")
+  .map { |(user_node)| User.new(user_node.as(Neo4j::Node)) }
+```
+
+This code would need to keep all of the user nodes in your entire graph in memory at once while it builds the array of `User` objects created from those nodes.
+
+Streaming results not only reduces memory usage, but also improves time to first result. Loading everything all at once means you can't process the first result until you have the last result. Streaming lets you process the first result before you've received the second.
+
 ### `reset`
 
 Resets a connection to a clean state. A connection will automatically call `reset` if an exception is raised within a transaction, so you shouldn't have to call this explicitly, but it's provided just in case.
