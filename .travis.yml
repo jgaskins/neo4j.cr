@@ -4,4 +4,4 @@ before_install:
   - tar -zxf neo4j.tar.gz
   - cd neo4j-community-3.5.2
   - bin/neo4j start
-  - while [ $? -ne 0 ]; do; curl -I http://localhost:7474 |head -1 | grep 200; done
+  - while [ $? -ne 0 ]; do curl -I http://localhost:7474 |head -1 | grep 200; done
