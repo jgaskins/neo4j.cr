@@ -29,9 +29,10 @@ connection = Neo4j::Bolt::Connection.new(
 )
 ```
 
-The `connection` has two public methods:
+The `connection` has the following public methods:
 
 - `execute(query : String, params = ({} of String => Neo4j::Type)) : Neo4j::Result`
+- `stream(query : String, params = ({} of String => Neo4j::Type)) : Neo4j::StreamingResult`
 - `transaction(&block)`
 - `reset`
 
