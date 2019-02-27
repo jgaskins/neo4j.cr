@@ -1,6 +1,9 @@
 # neo4j.cr
 
 [![Join the chat at https://gitter.im/jgaskins/neo4j.cr](https://badges.gitter.im/jgaskins/neo4j.cr.svg)](https://gitter.im/jgaskins/neo4j.cr?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+<a href="https://travis-ci.org/jgaskins/neo4j.cr">
+  <img src="https://travis-ci.org/jgaskins/neo4j.cr.svg?branch=master" alt="Check out the build on Travis CI">
+</a>
 
 Crystal implementation of a Neo4j driver using the Bolt protocol.
 
