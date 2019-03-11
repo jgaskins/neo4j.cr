@@ -7,7 +7,7 @@ module Neo4j
     ::Neo4j.map_node(
       name: String,
       created_at: Time,
-      number: Int32,
+      number: Int64,
       nilable_value: { type: String, nilable: true },
     )
   end
@@ -29,7 +29,7 @@ module Neo4j
         properties: {
           "name" => "Jamie",
           "created_at" => Time.new(2015, 4, 20, 16, 20, 31).to_unix,
-          "number" => 42,
+          "number" => 42_i8,
           "nilable_value" => nil,
         } of String => Type,
       ))
