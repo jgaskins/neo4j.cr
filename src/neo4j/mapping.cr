@@ -92,10 +92,10 @@ module Neo4j
           end
         {% elsif value[:type].stringify.includes? "UInt" %}
           {% int_bit_size = value[:type].stringify.gsub(/\D+/, "") %}
-          @{{key.id}} = %property_value.as(Int).to_u{{int_bit_size.id}}
+          @{{key.id}} = %property_value.as(Int).to_u{{int_bit_size.id}}{% if value[:nilable] %} if %property_value {% end %}
         {% elsif value[:type].stringify.includes? "Int" %}
           {% int_bit_size = value[:type].stringify.gsub(/\D+/, "") %}
-          @{{key.id}} = %property_value.as(Int).to_i{{int_bit_size.id}}
+          @{{key.id}} = %property_value.as(Int).to_i{{int_bit_size.id}}{% if value[:nilable] %} if %property_value {% end %}
         {% else %}
           @{{key.id}} = %property_value.as({{value[:type]}}{{(value[:nilable] && !value[:optional] ? "?" : "").id}})
         {% end %}

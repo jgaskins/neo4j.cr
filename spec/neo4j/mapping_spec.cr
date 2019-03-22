@@ -9,6 +9,8 @@ module Neo4j
       created_at: Time,
       number: Int64,
       nilable_value: { type: String, nilable: true },
+      nilable_question_mark: Int::Signed?,
+      nonexistent_on_node: Int64?,
     )
   end
 
@@ -31,6 +33,7 @@ module Neo4j
           "created_at" => Time.new(2015, 4, 20, 16, 20, 31).to_unix,
           "number" => 42_i8,
           "nilable_value" => nil,
+          "nilable_question_mark" => nil,
         } of String => Type,
       ))
 
@@ -40,6 +43,8 @@ module Neo4j
       model.created_at.should eq Time.new(2015, 4, 20, 16, 20, 31)
       model.number.should eq 42
       model.nilable_value.should eq nil
+      model.nilable_question_mark.should eq nil
+      model.nonexistent_on_node.should eq nil
 
       # Node metadata, the subtly important stuff
 
