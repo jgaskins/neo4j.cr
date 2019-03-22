@@ -203,7 +203,7 @@ module Neo4j
         @connection.flush
       end
 
-      private def run(statement, parameters = {} of String => Type)
+      private def run(statement, parameters = {} of String => Type, retries = 5)
         write_message do |msg|
           msg.write_structure_start 2
           msg.write_byte Commands::Run
@@ -220,9 +220,13 @@ module Neo4j
         else
           raise ::Neo4j::UnknownResult.new("Cannot identify this result: #{result.inspect}")
         end
-      rescue ex : IO::EOFError
-        initialize @uri, @ssl
-        run statement, parameters
+      rescue ex : IO::EOFError | OpenSSL::SSL::Error | Errno
+        if retries > 0
+          initialize @uri, @ssl
+          run statement, parameters, retries - 1
+        else
+          raise ex
+        end
       end
 
       private def pull_all
