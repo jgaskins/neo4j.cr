@@ -59,12 +59,7 @@ module Neo4j
           @connection = OpenSSL::SSL::Socket::Client.new(@connection, context)
         end
 
-        @connection.write handshake
-        @connection.flush
-        server_version = @connection.read_bytes(
-          Int32,
-          IO::ByteFormat::BigEndian
-        )
+        handshake
 
         init username, password
       end
@@ -287,15 +282,18 @@ module Neo4j
       end
 
       private def handshake
-        (GOGOBOLT + SUPPORTED_VERSIONS).to_slice
-      end
-
-      private def ack_failure
-        write_message do |msg|
-          msg.write_structure_start 0
-          msg.write_byte Commands::AckFailure
+        @connection.write GOGOBOLT
+        SUPPORTED_VERSIONS.each do |ver|
+          @connection.write_bytes ver, IO::ByteFormat::BigEndian
         end
-        read_result
+        @connection.flush
+
+        # Read server version
+        # @todo Verify this
+        @connection.read_bytes(
+          Int32,
+          IO::ByteFormat::BigEndian
+        )
       end
 
       private def send_message(string : String)
