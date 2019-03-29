@@ -10,13 +10,8 @@ require "openssl"
 module Neo4j
   module Bolt
     class Connection
-      GOGOBOLT = "\x60\x60\xB0\x17"
-      SUPPORTED_VERSIONS = String.new(Bytes[
-        0, 0, 0, 2,
-        0, 0, 0, 0,
-        0, 0, 0, 0,
-        0, 0, 0, 0,
-      ])
+      GOGOBOLT = "\x60\x60\xB0\x17".to_slice
+      SUPPORTED_VERSIONS = { 2, 0, 0, 0 }
       enum Commands
         Init       = 0x01
         Run        = 0x10
@@ -89,7 +84,7 @@ module Neo4j
         else
           spawn do
             until result.is_a?(Success) || result.is_a?(Ignored)
-              results << result.as(Array(Type))
+              results << result.as(List)
               result = read_result
             end
             results.complete!
@@ -99,7 +94,7 @@ module Neo4j
         results
       end
 
-      def execute(query, parameters : Hash(String, Type))
+      def execute(query, parameters : Map)
         if @transaction
           Result.new(type: run(query, parameters), data: pull_all)
         else
@@ -108,7 +103,7 @@ module Neo4j
       end
 
       def execute(query, **params)
-        params_hash = {} of String => Type
+        params_hash = Map.new
 
         params.each { |key, value| params_hash[key.to_s] = value }
 
@@ -156,6 +151,14 @@ module Neo4j
         write_message do |msg|
           msg.write_structure_start 0
           msg.write_byte Commands::Reset
+        end
+        read_result
+      end
+
+      private def ack_failure
+        write_message do |msg|
+          msg.write_structure_start 0
+          msg.write_byte Commands::AckFailure
         end
         read_result
       end
@@ -230,11 +233,11 @@ module Neo4j
           msg.write_byte Commands::PullAll
         end
 
-        results = Array(Array(Type)).new
+        results = Array(List).new
         result = read_result
 
         until result.is_a?(Success) || result.is_a?(Ignored)
-          results << result.as(Array(Type))
+          results << result.as(List)
           result = read_result
         end
 
@@ -306,9 +309,8 @@ module Neo4j
     end
   end
 
-  alias Row = Array(Type)
   class StreamingResultSet
-    include Iterable(Row)
+    include Iterable(List)
 
     delegate complete!, to: @iterator
 
@@ -316,7 +318,7 @@ module Neo4j
       @iterator = Iterator.new
     end
 
-    def <<(value : Row) : self
+    def <<(value : List) : self
       @iterator.channel.send value
       self
     end
@@ -326,12 +328,12 @@ module Neo4j
     end
 
     class Iterator
-      include ::Iterator(Row)
+      include ::Iterator(List)
 
       getter channel
 
       def initialize
-        @channel = Channel(Row).new(1)
+        @channel = Channel(List).new(1)
         @complete = false
       end
 
@@ -350,8 +352,8 @@ module Neo4j
   end
 
   class StreamingResult
-    include Iterable(Row)
-    include Enumerable(Row)
+    include Iterable(List)
+    include Enumerable(List)
 
     getter type, data
 
@@ -365,7 +367,7 @@ module Neo4j
       @data.each
     end
 
-    def each(&block : Row ->)
+    def each(&block : List ->)
       each.each do |row|
         yield row
       end

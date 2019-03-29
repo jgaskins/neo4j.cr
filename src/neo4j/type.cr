@@ -1,10 +1,9 @@
 module Neo4j
   struct Node
-    @properties : Hash(String, Type)
-    getter :properties
     getter(
       id : Int32,
       labels : Array(String),
+      properties : Map,
     )
 
     def initialize(@id, @labels, @properties)
@@ -12,14 +11,12 @@ module Neo4j
   end
 
   struct Relationship
-    @properties : Hash(String, Type)
-    getter :properties
-
     getter(
       id : Int32,
       start : Int32,
       end : Int32,
       type : String,
+      properties : Map,
     )
 
     def initialize(@id, @start, @end, @type, @properties)
@@ -30,10 +27,8 @@ module Neo4j
     getter(
       id : Int32,
       type : String,
+      properties : Map,
     )
-
-    @properties : Hash(String, Type)
-    getter :properties
 
     def initialize(@id, @type, @properties)
     end
@@ -59,7 +54,7 @@ module Neo4j
   end
 
   struct Success
-    getter attrs : Hash(String, Type)
+    getter attrs : Map
 
     def initialize(@attrs)
     end
@@ -76,7 +71,7 @@ module Neo4j
   end
 
   struct Failure
-    getter attrs : Hash(String, Type)
+    getter attrs : Map
 
     def initialize(@attrs)
     end
@@ -100,15 +95,14 @@ module Neo4j
   end
 
   struct LatLng
-    getter latitude : Float64
-    getter longitude : Float64
-    getter type : Int16
+    getter latitude, longitude, type
 
     def initialize(@latitude : Float64, @longitude : Float64, @type = 4326_i16)
     end
   end
 
-  alias Type = Nil |
+  alias ValueType =
+    Nil |
     Bool |
     String |
     Int8 |
@@ -116,8 +110,6 @@ module Neo4j
     Int32 |
     Int64 |
     Float64 |
-    Array(Type) |
-    Hash(String, Type) |
     Time |
     Point2D |
     Point3D |
@@ -126,7 +118,13 @@ module Neo4j
     Relationship |
     UnboundRelationship |
     Path |
-    Success |
-    Failure |
-    Ignored
+    Array(ValueType) |
+    Hash(String, ValueType)
+
+  alias List = Array(ValueType)
+  alias Map = Hash(String, ValueType)
+
+  alias ResponseType = Success | Failure | Ignored
+
+  alias Type = ValueType | ResponseType
 end

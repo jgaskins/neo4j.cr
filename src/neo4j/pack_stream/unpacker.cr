@@ -75,22 +75,20 @@ module Neo4j
         end                                # end
       {% end %}
 
-      def read_array(fetch_next_token = true)
+      def read_array(fetch_next_token = true) : List
         next_token if fetch_next_token
         check Token::Type::Array
-        Array(Type).new(token.size.to_i32) do
-          read_value
+        List.new(token.size.to_i32) do
+          read_value.as(ValueType)
         end
       end
 
-      def read_hash(fetch_next_token = true)
+      def read_hash(fetch_next_token = true) : Map
         next_token if fetch_next_token
         check Token::Type::Hash
-        hash = Hash(String, Type).new(initial_capacity: token.size.to_i32)
+        hash = Map.new(initial_capacity: token.size.to_i32)
         token.size.times do
-          key = read_string
-          value = read_value
-          hash[key] = value
+          hash[read_string] = read_value.as(ValueType)
         end
         hash
       end
@@ -106,7 +104,7 @@ module Neo4j
           id = read_numeric.to_i32
           labels = read_array.map(&.to_s)
           props = read_hash
-            .each_with_object({} of String => Type) { |(k, v), h|
+            .each_with_object(Map.new) { |(k, v), h|
               h[k.to_s] = v }
           Node.new(id, labels, props)
         when StructureTypes::Relationship.value
@@ -116,7 +114,7 @@ module Neo4j
             end: read_numeric.to_i32,
             type: read_string,
             properties: read_hash
-              .each_with_object({} of String => Type) { |(k, v), h|
+              .each_with_object(Map.new) { |(k, v), h|
                 h[k.to_s] = v }
           )
         when StructureTypes::Path.value
@@ -130,7 +128,7 @@ module Neo4j
             id: read_numeric.to_i32,
             type: read_string,
             properties: read_hash
-              .each_with_object({} of String => Type) { |(k, v), h|
+              .each_with_object(Map.new) { |(k, v), h|
                 h[k.to_s] = v }
           )
         when StructureTypes::Success.value
@@ -177,8 +175,8 @@ module Neo4j
         # when STRUCTURE_TYPES[:duration]
         #   Time::Span.new(months: read_int, days: read_int, seconds: read_int, nanoseconds: read_int)
         else
-          Array(Type).new(token.size) do
-            read_value
+          Array(ValueType).new(token.size) do
+            read_value.as ValueType
           end
         end
       end
@@ -190,7 +188,7 @@ module Neo4j
         token.size.times { yield }
       end
 
-      def read_value : Type
+      def read_value
         next_token
 
         case token.type

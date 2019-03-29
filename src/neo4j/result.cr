@@ -2,10 +2,10 @@ require "./exceptions"
 
 module Neo4j
   class Result
-    include Enumerable(Array(Type))
+    include Enumerable(List)
 
     getter type : Success | Ignored
-    getter data : Array(Array(Type))
+    getter data : Array(List)
 
     def initialize(@type, @data)
     end
