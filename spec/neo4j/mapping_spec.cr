@@ -11,6 +11,8 @@ module Neo4j
       nilable_value: { type: String, nilable: true },
       nilable_question_mark: Int::Signed?,
       nonexistent_on_node: Int64?,
+      int_with_default: { type: Int32, default: 0 },
+      string_with_default: { type: String, default: "hi" },
     )
   end
 
@@ -20,6 +22,8 @@ module Neo4j
       added_at: Time,
       number: Int32,
       nilable_value: { type: String, nilable: true },
+      int_with_default: { type: Int64, default: 0 },
+      string_with_default: { type: String, default: "hello" },
     )
   end
 
@@ -28,13 +32,13 @@ module Neo4j
       model = MappingNodeExample.new(Node.new(
         id: 123,
         labels: ["Foo", "Bar"],
-        properties: {
+        properties: Map {
           "name" => "Jamie",
           "created_at" => Time.new(2015, 4, 20, 16, 20, 31).to_unix,
           "number" => 42_i8,
           "nilable_value" => nil,
           "nilable_question_mark" => nil,
-        } of String => Type,
+        },
       ))
 
       # Node properties, the important stuff
@@ -45,6 +49,8 @@ module Neo4j
       model.nilable_value.should eq nil
       model.nilable_question_mark.should eq nil
       model.nonexistent_on_node.should eq nil
+      model.int_with_default.should eq 0
+      model.string_with_default.should eq "hi"
 
       # Node metadata, the subtly important stuff
 
@@ -58,12 +64,12 @@ module Neo4j
         start: 456,
         end: 789,
         type: "FOO_BAR",
-        properties: {
+        properties: Map {
           "role" => "user",
           "added_at" => Time.new(2015, 4, 20, 16, 20, 31).to_unix,
           "number" => 42,
           "nilable_value" => "not nil this time",
-        } of String => Type,
+        },
       ))
 
       # Properties
@@ -72,6 +78,8 @@ module Neo4j
       model.added_at.should eq Time.new(2015, 4, 20, 16, 20, 31)
       model.number.should eq 42
       model.nilable_value.should eq "not nil this time"
+      model.int_with_default.should eq 0
+      model.string_with_default.should eq "hello"
 
       # Relationship metadata
 

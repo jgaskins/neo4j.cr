@@ -20,4 +20,7 @@ module Neo4j
 
   class NestedTransactionError < Exception
   end
+
+  class PropertyMissing < Exception
+  end
 end

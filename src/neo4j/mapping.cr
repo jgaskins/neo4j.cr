@@ -1,4 +1,5 @@
 require "./type"
+require "./exceptions"
 
 module Neo4j
   macro map_relationship(**__properties__)
@@ -67,11 +68,19 @@ module Neo4j
       {% end %}
 
       {% for key, value in __properties__ %}
-        {% if value[:nilable] %}
-          %property_value = %node.properties[{{key.stringify}}]?
-        {% else %}
-          %property_value = %node.properties[{{key.stringify}}]
-        {% end %}
+        %property_value = %node.properties.fetch({{key.stringify}}) do |key|
+          {% if value[:default] %}
+            {{value[:default]}}
+          {% elsif value[:nilable] %}
+            nil
+          {% else %}
+            {% if type.resolve == ::Neo4j::Node %}
+              raise PropertyMissing.new("Node with id #{@node_id} and labels #{@node_labels.inspect} is missing property #{key}")
+            {% elsif type.resolve == ::Neo4j::Relationship %}
+              raise PropertyMissing.new("Relationship with id #{@relationship_id} and type #{@relationship_type.inspect} is missing property #{key}")
+            {% end %}
+          {% end %}
+        end
 
         {% if value[:type].stringify == "UUID" %}
           @{{value[:key_id]}} = UUID.new(%property_value.as(String))
