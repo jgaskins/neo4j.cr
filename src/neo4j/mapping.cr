@@ -75,9 +75,9 @@ module Neo4j
             nil
           {% else %}
             {% if type.resolve == ::Neo4j::Node %}
-              raise PropertyMissing.new("Node with id #{@node_id} and labels #{@node_labels.inspect} is missing property #{key}")
+              raise ::Neo4j::PropertyMissing.new("Node with id #{@node_id} and labels #{@node_labels.inspect} is missing property #{key}")
             {% elsif type.resolve == ::Neo4j::Relationship %}
-              raise PropertyMissing.new("Relationship with id #{@relationship_id} and type #{@relationship_type.inspect} is missing property #{key}")
+              raise ::Neo4j::PropertyMissing.new("Relationship with id #{@relationship_id} and type #{@relationship_type.inspect} is missing property #{key}")
             {% end %}
           {% end %}
         end

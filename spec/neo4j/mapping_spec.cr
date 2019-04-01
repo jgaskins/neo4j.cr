@@ -2,31 +2,31 @@ require "../spec_helper"
 
 require "../../src/neo4j/mapping"
 
+struct MappingNodeExample
+  Neo4j.map_node(
+    name: String,
+    created_at: Time,
+    number: Int64,
+    nilable_value: { type: String, nilable: true },
+    nilable_question_mark: Int::Signed?,
+    nonexistent_on_node: Int64?,
+    int_with_default: { type: Int32, default: 0 },
+    string_with_default: { type: String, default: "hi" },
+  )
+end
+
+struct MappingRelationshipExample
+  Neo4j.map_relationship(
+    role: String,
+    added_at: Time,
+    number: Int32,
+    nilable_value: { type: String, nilable: true },
+    int_with_default: { type: Int64, default: 0 },
+    string_with_default: { type: String, default: "hello" },
+  )
+end
+
 module Neo4j
-  struct MappingNodeExample
-    ::Neo4j.map_node(
-      name: String,
-      created_at: Time,
-      number: Int64,
-      nilable_value: { type: String, nilable: true },
-      nilable_question_mark: Int::Signed?,
-      nonexistent_on_node: Int64?,
-      int_with_default: { type: Int32, default: 0 },
-      string_with_default: { type: String, default: "hi" },
-    )
-  end
-
-  struct MappingRelationshipExample
-    ::Neo4j.map_relationship(
-      role: String,
-      added_at: Time,
-      number: Int32,
-      nilable_value: { type: String, nilable: true },
-      int_with_default: { type: Int64, default: 0 },
-      string_with_default: { type: String, default: "hello" },
-    )
-  end
-
   describe "mapping" do
     it "maps nodes to models" do
       model = MappingNodeExample.new(Node.new(
