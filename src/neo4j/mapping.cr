@@ -68,7 +68,7 @@ module Neo4j
       {% end %}
 
       {% for key, value in __properties__ %}
-        %property_value = %node.properties.fetch({{key.stringify}}) do |key|
+        %property_value = %node.properties.fetch({{value[:key] || key.stringify}}) do |key|
           {% if value[:default] %}
             {{value[:default]}}
           {% elsif value[:nilable] %}

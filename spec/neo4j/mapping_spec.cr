@@ -12,6 +12,7 @@ struct MappingNodeExample
     nonexistent_on_node: Int64?,
     int_with_default: { type: Int32, default: 0 },
     string_with_default: { type: String, default: "hi" },
+    string_with_other_key: { type: String, key: "stringWithOtherKey" },
   )
 end
 
@@ -38,6 +39,7 @@ module Neo4j
           "number" => 42_i8,
           "nilable_value" => nil,
           "nilable_question_mark" => nil,
+          "stringWithOtherKey" => "value",
         },
       ))
 
@@ -51,6 +53,7 @@ module Neo4j
       model.nonexistent_on_node.should eq nil
       model.int_with_default.should eq 0
       model.string_with_default.should eq "hi"
+      model.string_with_other_key.should eq "value"
 
       # Node metadata, the subtly important stuff
 
