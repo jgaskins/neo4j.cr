@@ -124,6 +124,34 @@ This code would need to keep all of the user nodes in your entire graph in memor
 
 Streaming results not only reduces memory usage, but also improves time to first result. Loading everything all at once means you can't process the first result until you have the last result. Streaming lets you process the first result before you've received the second.
 
+**IMPORTANT:** The result stays inside the communication buffer until the application consumes it. If you are using a connection pool, it is important not to release the connection back to the pool until you've consumed the entire result set:
+
+```crystal
+CONNECTION_POOL = ConnectionPool(Neo4j::Bolt::Connection).new do
+  Neo4j::Bolt::Connection.new(NEO4J_URL)
+end
+
+def fetch_posts(for topic : Topic) : Array(Post)
+  CONNECTION_POOL.connection do |conn|
+    results = conn.stream <<-CYPHER, topic_id: topic.id
+      MATCH (topic : Topic { id: $topic_id })
+      MATCH (post : Post)
+      MATCH (post)-[:POSTED_TO]->(topic)
+
+      RETURN post
+    CYPHER
+
+    # This lazily consumes all of the results, so when we exit this block, we
+    # will not have consumed them. We need to eliminate the `each` here.
+    results.each.map do |(post)|
+      Post.new(post.as Neo4j::Node)
+    end
+  end
+end
+
+posts = fetch_posts for: topic
+```
+
 ### `reset`
 
 Resets a connection to a clean state. A connection will automatically call `reset` if an exception is raised within a transaction, so you shouldn't have to call this explicitly, but it's provided just in case.
