@@ -97,7 +97,7 @@ module Neo4j
               @{{value[:key_id]}} = %property_value
           {% end %}
           else
-            raise ArgumentError.new("Property #{{{key.id}}} must be a String or Int value to cast into a Time")
+            raise ArgumentError.new("Property {{key.id}} must be a String or Int value to cast into a Time")
           end
         {% elsif value[:type].stringify.includes? "UInt" %}
           {% int_bit_size = value[:type].stringify.gsub(/\D+/, "") %}
