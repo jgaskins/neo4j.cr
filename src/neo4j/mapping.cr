@@ -95,6 +95,10 @@ module Neo4j
       {% end %}
     {% end %}
 
+    def self.from_bolt(io)
+      new ::Neo4j::PackStream::Unpacker.new(io).read_structure(io).as(::Neo4j::Node)
+    end
+
     def initialize(%node : {{type}})
       {% if type.resolve == ::Neo4j::Node %}
         @node_id = %node.id

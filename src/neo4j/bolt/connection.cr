@@ -3,6 +3,7 @@ require "../pack_stream"
 require "../pack_stream/packer"
 require "../result"
 require "./transaction"
+require "./from_bolt"
 
 require "socket"
 require "openssl"
@@ -100,6 +101,36 @@ module Neo4j
         else
           transaction { execute query, parameters }
         end
+      end
+
+      def exec_cast(query : String, parameters : Map, types : TYPES) forall TYPES
+        run query, parameters
+
+        write_message do |msg|
+          msg.write_structure_start 0
+          msg.write_byte Commands::PullAll
+        end
+
+        {% begin %}
+          results = Array({{ TYPES.type_vars.map(&.stringify.gsub(/\.class$/, "").id).stringify.tr("[]", "{}").id }}).new
+
+          result = read_raw_result
+          until result[1] != 0x71
+            # First 3 bytes are Structure, Record, and List
+            # TODO: If the RETURN clause in the query has more than 16 items,
+            # this will break because the List byte marker and its size won't be
+            # in a single byte. We'll need to detect this here.
+            io = IO::Memory.new(result + 3)
+            results << {
+              {% for type in TYPES %}
+                {{type.stringify.gsub(/\.class$/, "").id}}.from_bolt(io),
+              {% end %}
+            }
+            result = read_raw_result
+          end
+
+          results
+        {% end %}
       end
 
       def execute(query, **params)
@@ -244,11 +275,19 @@ module Neo4j
         results
       end
 
+      private def read_result
+        PackStream.unpack(read_raw_result).tap do |result|
+          if result.is_a? Failure
+            raise ::Neo4j::QueryException.new(result.attrs["message"].as(String), result.attrs["code"].as(String))
+          end
+        end
+      end
+
       # Read a single result from the server in 64kb chunks. This is a bit of a
       # naive implementation that buffers the chunks until it has the full
       # result, then flattens out the chunks into a single slice and parses
       # that slice. 
-      private def read_result
+      private def read_raw_result
         length = 1_u16
         messages = [] of Bytes
         length = @connection.read_bytes(UInt16, IO::ByteFormat::BigEndian)
@@ -268,11 +307,7 @@ module Neo4j
           bytes + current_byte
         end
 
-        PackStream.unpack(bytes).tap do |result|
-          if result.is_a? Failure
-            raise ::Neo4j::QueryException.new(result.attrs["message"].as(String), result.attrs["code"].as(String))
-          end
-        end
+        bytes
       end
 
       private def write(value)

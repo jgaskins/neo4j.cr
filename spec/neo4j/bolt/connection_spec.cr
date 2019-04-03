@@ -2,6 +2,14 @@ require "../../../spec_helper"
 require "uuid"
 
 require "../../../../src/neo4j/bolt/connection"
+require "../../../../src/neo4j/mapping"
+
+struct TestNode
+  Neo4j.map_node(
+    id: UUID,
+    name: String,
+  )
+end
 
 module Neo4j
   module Bolt
@@ -177,6 +185,56 @@ module Neo4j
             results.first # Consumes the first result
             results.count(&.itself).should eq 2 # So there are 2 left over
             results.count(&.itself).should eq 0 # Now there are none left
+
+            txn.rollback
+          end
+        end
+
+        it "deserializes nodes as the proper type" do
+          connection.transaction do |txn|
+            id = connection
+              .execute("CREATE (node:TestNode { id: randomUUID(), name: 'Test' }) RETURN node.id")
+              .first
+              .first
+              .as(String)
+
+            values = connection.exec_cast("return 12, 42, 500, 2000000000000", Map.new, { Int8, Int16, Int32, Int64 })
+            values.should be_a Array(Tuple(Int8, Int16, Int32, Int64))
+            values.should eq [{ 12, 42, 500, 2_000_000_000_000 }]
+
+            values = connection.exec_cast("return 6.9", Map.new, { Float64 })
+            values.should be_a Array(Tuple(Float64))
+            values.should eq [{ 6.9 }]
+
+            values = connection.exec_cast "RETURN 'hello ' + $target, true",
+              parameters: Map { "target" => "world" },
+              types: { String, Bool }
+            values.should eq [{ "hello world", true }]
+
+            values = connection.exec_cast(<<-CYPHER, Map.new, { Point2D, LatLng, Point3D })
+              RETURN
+                point({ x: 69, y: 420 }),
+                point({ latitude: 39, longitude: -76 }),
+                point({ x: 1.1, y: 2.2, z: 3.3 })
+            CYPHER
+            p2d, latlng, p3d = values.first
+            p2d.x.should eq 69
+            p2d.y.should eq 420
+            latlng.latitude.should eq 39.0
+            latlng.longitude.should eq -76.0
+            p3d.x.should eq 1.1
+            p3d.y.should eq 2.2
+            p3d.z.should eq 3.3
+
+            # Test multiple rows returned
+            values = connection.exec_cast(<<-CYPHER, Map.new, { Int8, Int16 })
+              UNWIND range(1, 2) AS value
+              UNWIND range(1, 2) AS second_value
+              RETURN value, second_value
+            CYPHER
+            values.should eq [{1, 1}, {1, 2}, {2, 1}, {2, 2}]
+
+            node = connection.exec_cast("MATCH (node:TestNode { id: $id }) RETURN node", { "id" => id }, { TestNode })
 
             txn.rollback
           end
