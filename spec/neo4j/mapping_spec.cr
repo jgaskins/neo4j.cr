@@ -13,7 +13,19 @@ struct MappingNodeExample
     int_with_default: { type: Int32, default: 0 },
     string_with_default: { type: String, default: "hi" },
     string_with_other_key: { type: String, key: "stringWithOtherKey" },
+    datestamp: { type: Time, converter: DateStampConversion, key: "date" },
   )
+
+  module DateStampConversion
+    def self.deserialize(value)
+      raise Exception.new("Cannot convert #{value.inspect} to a Time")
+    end
+
+    def self.deserialize(value : String)
+      year, month, day = value.split("-", 3).map(&.to_i)
+      Time.new(year, month, day)
+    end
+  end
 end
 
 struct MappingRelationshipExample
@@ -40,6 +52,7 @@ module Neo4j
           "nilable_value" => nil,
           "nilable_question_mark" => nil,
           "stringWithOtherKey" => "value",
+          "date" => "2019-01-23",
         },
       ))
 
@@ -54,6 +67,7 @@ module Neo4j
       model.int_with_default.should eq 0
       model.string_with_default.should eq "hi"
       model.string_with_other_key.should eq "value"
+      model.datestamp.should eq Time.new(2019, 1, 23)
 
       # Node metadata, the subtly important stuff
 

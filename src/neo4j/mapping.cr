@@ -2,6 +2,33 @@ require "./type"
 require "./exceptions"
 
 module Neo4j
+  module TimeConverter
+    def self.serialize(time)
+    end
+
+    def self.deserialize(value)
+      raise ArgumentError.new("Property {{key.id}} must be a String or Int value to cast into a Time")
+    end
+
+    def self.deserialize(value : String) : Time
+      Time.parse_iso8601 value
+    end
+
+    def self.deserialize(value : Int) : Time
+      Time.unix value
+    end
+
+    def self.deserialize(value : Time) : Time
+      value
+    end
+  end
+
+  module UUIDConverter
+    def self.deserialize(value)
+      UUID.new(value.as(String))
+    end
+  end
+
   macro map_relationship(**__properties__)
     ::Neo4j.map_relationship({{__properties__}})
   end
@@ -35,6 +62,18 @@ module Neo4j
       {% if value.is_a?(Generic) && value.type_vars.any?(&.resolve.nilable?) %}
         {% __properties__[key][:nilable] = true %}
         {% __properties__[key][:optional] = true %}
+      {% end %}
+    {% end %}
+
+    {% for key, value in __properties__ %}
+      {% if !value[:converter] %}
+        {% if value[:type].stringify == "Time" %}
+          {% value[:converter] = ::Neo4j::TimeConverter %}
+        {% elsif value[:type].stringify == "UUID" %}
+          {% value[:converter] = ::Neo4j::UUIDConverter %}
+        {% else %}
+          {% value[:converter] = nil %}
+        {% end %}
       {% end %}
     {% end %}
 
@@ -82,29 +121,14 @@ module Neo4j
           {% end %}
         end
 
-        {% if value[:type].stringify == "UUID" %}
-          @{{value[:key_id]}} = UUID.new(%property_value.as(String))
-        {% elsif value[:type].stringify == "Time" %}
-          case %property_value
-          when String
-            @{{value[:key_id]}} = Time.parse_iso8601(%property_value)
-          when Int
-            @{{value[:key_id]}} = Time.unix(%property_value)
-          when Time
-            @{{value[:key_id]}} = %property_value
-          {% if value[:nilable] %}
-            when Nil
-              @{{value[:key_id]}} = %property_value
-          {% end %}
-          else
-            raise ArgumentError.new("Property {{key.id}} must be a String or Int value to cast into a Time")
-          end
-        {% elsif value[:type].stringify.includes? "UInt" %}
+        {% if value[:type].stringify.includes? "UInt" %}
           {% int_bit_size = value[:type].stringify.gsub(/\D+/, "") %}
           @{{key.id}} = %property_value.as(Int).to_u{{int_bit_size.id}}{% if value[:nilable] %} if %property_value {% end %}
         {% elsif value[:type].stringify.includes? "Int" %}
           {% int_bit_size = value[:type].stringify.gsub(/\D+/, "") %}
           @{{key.id}} = %property_value.as(Int).to_i{{int_bit_size.id}}{% if value[:nilable] %} if %property_value {% end %}
+        {% elsif value[:converter] %}
+          @{{value[:key_id]}} = {{value[:converter]}}.deserialize(%property_value)
         {% else %}
           @{{key.id}} = %property_value.as({{value[:type]}}{{(value[:nilable] && !value[:optional] ? "?" : "").id}})
         {% end %}
