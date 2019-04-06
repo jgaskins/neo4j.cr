@@ -84,20 +84,20 @@ module Neo4j
         Node.new(
           id: 123,
           labels: ["Foo"],
-          properties: {
+          properties: Map {
             "foo" => "bar",
             "answer" => 42,
             "contrived" => true,
-          } of String => Type,
+          },
         ),
         Relationship.new(
           id: 123,
           start: 456,
           end: 789,
           type: "OMG_LOL",
-          properties: {
+          properties: Map {
             "one" => 1,
-          } of String => Type,
+          },
         ),
       }.each do |value|
         it "serializes and deserializes #{value.class}" do
