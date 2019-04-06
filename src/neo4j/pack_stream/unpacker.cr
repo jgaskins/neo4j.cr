@@ -216,10 +216,10 @@ module Neo4j
       end
 
       private delegate token, to: @lexer
-      private delegate next_token, to: @lexer
+      delegate next_token, to: @lexer
       delegate prefetch_token, to: @lexer
 
-      private def check(token_type)
+      def check(token_type)
         unexpected_token(token_type) unless token.type == token_type
       end
 

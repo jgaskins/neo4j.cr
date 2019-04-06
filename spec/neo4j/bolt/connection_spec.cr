@@ -11,6 +11,20 @@ struct TestNode
   )
 end
 
+struct Product
+  Neo4j.map_node(
+    id: UUID,
+    name: String,
+  )
+end
+
+struct Category
+  Neo4j.map_node(
+    id: UUID,
+    name: String,
+  )
+end
+
 module Neo4j
   module Bolt
     run_integration_specs = ENV["NEO4J_URL"]?
@@ -190,27 +204,35 @@ module Neo4j
           end
         end
 
-        it "deserializes nodes as the proper type" do
-          connection.transaction do |txn|
-            id = connection
-              .execute("CREATE (node:TestNode { id: randomUUID(), name: 'Test' }) RETURN node.id")
-              .first
-              .first
-              .as(String)
-
+        describe "deserializing nodes as the specified type" do
+          it "deserializes ints" do
             values = connection.exec_cast("return 12, 42, 500, 2000000000000", Map.new, { Int8, Int16, Int32, Int64 })
             values.should be_a Array(Tuple(Int8, Int16, Int32, Int64))
             values.should eq [{ 12, 42, 500, 2_000_000_000_000 }]
 
+            # Test multiple rows and multiple values returned
+            values = connection.exec_cast(<<-CYPHER, Map.new, { Int8, Int16 })
+              UNWIND range(1, 2) AS value
+              UNWIND range(1, 2) AS second_value
+              RETURN value, second_value
+            CYPHER
+            values.should eq [{1, 1}, {1, 2}, {2, 1}, {2, 2}]
+          end
+
+          it "deserializes floats" do
             values = connection.exec_cast("return 6.9", Map.new, { Float64 })
             values.should be_a Array(Tuple(Float64))
             values.should eq [{ 6.9 }]
+          end
 
+          it "deserializes strings and booleans" do
             values = connection.exec_cast "RETURN 'hello ' + $target, true",
               parameters: Map { "target" => "world" },
               types: { String, Bool }
             values.should eq [{ "hello world", true }]
+          end
 
+          it "deserializes spatial types" do
             values = connection.exec_cast(<<-CYPHER, Map.new, { Point2D, LatLng, Point3D })
               RETURN
                 point({ x: 69, y: 420 }),
@@ -225,18 +247,70 @@ module Neo4j
             p3d.x.should eq 1.1
             p3d.y.should eq 2.2
             p3d.z.should eq 3.3
+          end
 
-            # Test multiple rows returned
-            values = connection.exec_cast(<<-CYPHER, Map.new, { Int8, Int16 })
-              UNWIND range(1, 2) AS value
-              UNWIND range(1, 2) AS second_value
-              RETURN value, second_value
-            CYPHER
-            values.should eq [{1, 1}, {1, 2}, {2, 1}, {2, 2}]
+          it "deserializes custom node types" do
+            connection.transaction do |txn|
+              id = connection
+                .execute("CREATE (node:TestNode { id: randomUUID(), name: 'Test' }) RETURN node.id")
+                .first
+                .first
+                .as(String)
 
-            node = connection.exec_cast("MATCH (node:TestNode { id: $id }) RETURN node", { "id" => id }, { TestNode })
+              values = connection.exec_cast "MATCH (node:TestNode { id: $id }) RETURN node",
+                { "id" => id },
+                { TestNode }
 
-            txn.rollback
+              values.should be_a Array(Tuple(TestNode))
+              values.first.first.name.should eq "Test"
+
+              txn.rollback
+            end
+          end
+
+          it "deserializes arrays" do
+            connection.transaction do |txn|
+              id = UUID.random.to_s
+
+              connection.execute <<-CYPHER, id: id
+                CREATE (category:Category {
+                  id: $id,
+                  name: "Stuff"
+                })
+
+                CREATE (product1:Product {
+                  id: randomUUID(),
+                  name: "Thing 1"
+                })
+
+                CREATE (product2:Product {
+                  id: randomUUID(),
+                  name: "Thing 2"
+                })
+
+                CREATE (product1)-[:IN_CATEGORY]->(category)
+                CREATE (product2)-[:IN_CATEGORY]->(category)
+              CYPHER
+
+              results = connection.exec_cast(<<-CYPHER, { "id" => id }, { Category, Array(Product) })
+                MATCH (product:Product)-[:IN_CATEGORY]->(category:Category)
+                WHERE category.id = $id
+                RETURN category, collect(product)
+                LIMIT 1
+              CYPHER
+              result = results.first
+              category, products = result
+
+              category.should be_a Category
+              products.should be_a Array(Product)
+              category.id.should eq UUID.new(id)
+              category.name.should eq "Stuff"
+              product_names = products.map(&.name)
+              product_names.includes?("Thing 1").should eq true
+              product_names.includes?("Thing 2").should eq true
+
+              txn.rollback
+            end
           end
         end
       end
