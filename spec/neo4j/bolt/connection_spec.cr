@@ -25,6 +25,14 @@ struct Category
   )
 end
 
+struct SomethingElse
+  Neo4j.map_node(
+    id: UUID,
+    name: String,
+    foo: Int32,
+  )
+end
+
 module Neo4j
   module Bolt
     run_integration_specs = ENV["NEO4J_URL"]?
@@ -308,6 +316,68 @@ module Neo4j
               product_names = products.map(&.name)
               product_names.includes?("Thing 1").should eq true
               product_names.includes?("Thing 2").should eq true
+
+              txn.rollback
+            end
+          end
+
+          it "supports union types for mapped nodes" do
+            connection.transaction do |txn|
+              id = connection.exec_cast(<<-CYPHER, Map.new, { UUID })
+                CREATE (category : Category {
+                  id: randomUUID(),
+                  name: "Stuff"
+                })
+
+                CREATE (product : Product {
+                  id: randomUUID(),
+                  name: "My Product"
+                })
+
+                CREATE (something_else : SomethingElse {
+                  id: randomUUID(),
+                  name: "Foo",
+                  foo: 32
+                })
+
+                CREATE (product)-[:IN_CATEGORY]->(category)
+                CREATE (something_else)-[:IN_CATEGORY]->(category)
+
+                RETURN category.id
+              CYPHER
+                .first
+                .first
+
+              # pp connection.execute(<<-CYPHER, id: id.to_s)
+              #   MATCH (thing)-[:IN_CATEGORY]->(category : Category { id: $id })
+              #   RETURN thing
+              # CYPHER
+
+              results = connection.exec_cast(<<-CYPHER, Map { "id" => id.to_s }, { Product | SomethingElse })
+                MATCH (thing)-[:IN_CATEGORY]->(category : Category { id: $id })
+                RETURN thing
+                ORDER BY labels(thing)
+              CYPHER
+                .map(&.first)
+
+              results.should be_a Array(Product | SomethingElse)
+              results[0].should be_a Product
+              results[1].should be_a SomethingElse
+
+              txn.rollback
+            end
+          end
+
+          it "supports unions of primitive types" do
+            connection.transaction do |txn|
+              connection.exec_cast("RETURN 42", Map.new, { Int32 | Int64 })
+                .first
+                .first
+                .should be_a Int64
+
+              connection.exec_cast("UNWIND [1, 'hello'] AS value RETURN value", Map.new, { Int32 | String })
+                .map(&.first) # Unwrap the tuples
+                .should eq [1, "hello"]
 
               txn.rollback
             end

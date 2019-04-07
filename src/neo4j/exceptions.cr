@@ -3,8 +3,9 @@ module Neo4j
   end
 
   class UnknownResult < Exception
-    def initialize(@message)
-    end
+  end
+
+  class UnknownType < Exception
   end
 
   class QueryException < Exception

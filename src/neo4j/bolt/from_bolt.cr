@@ -1,5 +1,6 @@
 require "../pack_stream/token"
 require "../pack_stream/unpacker"
+require "../exceptions"
 
 {% for size in %w(8 16 32 64) %}
   def Int{{size.id}}.from_bolt(io)
@@ -39,4 +40,53 @@ module Neo4j
   def Point3D.from_bolt(io)
     PackStream::Unpacker.new(io).read_structure.as(Point3D)
   end
+end
+
+def UUID.from_bolt(io)
+  UUID.new(String.from_bolt(io))
+end
+
+def Union.from_bolt(io)
+  {% begin %}
+    unpacker = ::Neo4j::PackStream::Unpacker.new(io)
+    unpacker.prefetch_token
+    token = unpacker.token
+
+    {% non_primitive_types = T.reject { |type| [Bool, Int8, Int16, Int32, Int64, Float64, String].includes? type } %}
+
+    {% if T.includes? Bool %}
+      return unpacker.read_bool if token.type.bool?
+    {% end %}
+    {% if T.any? { |type| type < Int } %}
+      if token.type.int?
+        {% largest_int_size = T
+          .select { |t| t.stringify.includes? "Int" }
+          .map { |t| t.stringify.gsub(/Int/, "").to_i }
+          .sort
+          .last
+        %}
+        int = unpacker.read_int.to_i{{largest_int_size}}
+        return int
+      end
+    {% end %}
+    {% if T.includes? Float64 %}
+      return unpacker.read_float if token.type.float?
+    {% end %}
+    {% if T.includes? String %}
+      return unpacker.read_string if token.type.string?
+    {% end %}
+
+    {% if non_primitive_types.empty? %}
+      raise ::Neo4j::UnknownType.new("Don't know how to cast #{unpacker.read_value.inspect} into #{{{T.join(" | ")}}}")
+    {% else %}
+      structure = unpacker.read_structure
+      {% for type in T %}
+        case structure
+        when ::Neo4j::Node
+          return {{type}}.new structure if structure.labels.includes? {{type.stringify}}
+        end
+      {% end %}
+      raise ::Neo4j::UnknownType.new("Don't know how to cast #{unpacker.read_value.inspect} into #{{{T}}.inspect}")
+    {% end %}
+  {% end %}
 end

@@ -215,7 +215,7 @@ module Neo4j
         end
       end
 
-      private delegate token, to: @lexer
+      delegate token, to: @lexer
       delegate next_token, to: @lexer
       delegate prefetch_token, to: @lexer
 
