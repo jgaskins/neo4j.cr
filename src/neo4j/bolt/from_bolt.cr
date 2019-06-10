@@ -1,3 +1,5 @@
+require "uuid"
+
 require "../pack_stream/token"
 require "../pack_stream/unpacker"
 require "../exceptions"

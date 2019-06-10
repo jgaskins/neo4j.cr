@@ -1,8 +1,8 @@
-require "../../../spec_helper"
+require "../../spec_helper"
 require "uuid"
 
-require "../../../../src/neo4j/bolt/connection"
-require "../../../../src/neo4j/mapping"
+require "../../../src/neo4j/bolt/connection"
+require "../../../src/neo4j/mapping"
 
 struct TestNode
   Neo4j.map_node(
@@ -214,12 +214,12 @@ module Neo4j
 
         describe "deserializing nodes as the specified type" do
           it "deserializes ints" do
-            values = connection.exec_cast("return 12, 42, 500, 2000000000000", Map.new, { Int8, Int16, Int32, Int64 })
+            values = connection.exec_cast("return 12, 42, 500, 2000000000000", { Int8, Int16, Int32, Int64 })
             values.should be_a Array(Tuple(Int8, Int16, Int32, Int64))
             values.should eq [{ 12, 42, 500, 2_000_000_000_000 }]
 
             # Test multiple rows and multiple values returned
-            values = connection.exec_cast(<<-CYPHER, Map.new, { Int8, Int16 })
+            values = connection.exec_cast(<<-CYPHER, { Int8, Int16 })
               UNWIND range(1, 2) AS value
               UNWIND range(1, 2) AS second_value
               RETURN value, second_value
@@ -228,7 +228,7 @@ module Neo4j
           end
 
           it "deserializes floats" do
-            values = connection.exec_cast("return 6.9", Map.new, { Float64 })
+            values = connection.exec_cast("return 6.9", { Float64 })
             values.should be_a Array(Tuple(Float64))
             values.should eq [{ 6.9 }]
           end
@@ -241,7 +241,7 @@ module Neo4j
           end
 
           it "deserializes spatial types" do
-            values = connection.exec_cast(<<-CYPHER, Map.new, { Point2D, LatLng, Point3D })
+            values = connection.exec_cast(<<-CYPHER, { Point2D, LatLng, Point3D })
               RETURN
                 point({ x: 69, y: 420 }),
                 point({ latitude: 39, longitude: -76 }),
@@ -300,7 +300,7 @@ module Neo4j
                 CREATE (product2)-[:IN_CATEGORY]->(category)
               CYPHER
 
-              results = connection.exec_cast(<<-CYPHER, { "id" => id }, { Category, Array(Product) })
+              results = connection.exec_cast(<<-CYPHER, { id: id }, { Category, Array(Product) })
                 MATCH (product:Product)-[:IN_CATEGORY]->(category:Category)
                 WHERE category.id = $id
                 RETURN category, collect(product)
@@ -323,7 +323,7 @@ module Neo4j
 
           it "supports union types for mapped nodes" do
             connection.transaction do |txn|
-              id = connection.exec_cast(<<-CYPHER, Map.new, { UUID })
+              id = connection.exec_cast(<<-CYPHER, { UUID })
                 CREATE (category : Category {
                   id: randomUUID(),
                   name: "Stuff"
@@ -370,12 +370,12 @@ module Neo4j
 
           it "supports unions of primitive types" do
             connection.transaction do |txn|
-              connection.exec_cast("RETURN 42", Map.new, { Int32 | Int64 })
+              connection.exec_cast("RETURN 42", { Int32 | Int64 })
                 .first
                 .first
                 .should be_a Int64
 
-              connection.exec_cast("UNWIND [1, 'hello'] AS value RETURN value", Map.new, { Int32 | String })
+              connection.exec_cast("UNWIND [1, 'hello'] AS value RETURN value", { Int32 | String })
                 .map(&.first) # Unwrap the tuples
                 .should eq [1, "hello"]
 

@@ -103,7 +103,15 @@ module Neo4j
         end
       end
 
-      def exec_cast(query : String, parameters : Map, types : TYPES) forall TYPES
+      def exec_cast(query : String, types : Tuple(*TYPES)) forall TYPES
+        exec_cast query, Map.new, types
+      end
+
+      def exec_cast(query : String, parameters : NamedTuple, types : Tuple(*TYPES)) forall TYPES
+        exec_cast query, parameters.to_h.transform_keys(&.to_s), types
+      end
+
+      def exec_cast(query : String, parameters : Map, types : Tuple(*TYPES)) forall TYPES
         run query, parameters
 
         write_message do |msg|
