@@ -228,12 +228,17 @@ module Neo4j
         packer = PackStream::Packer.new
         yield packer
 
-        slice = packer.to_slice
-        length = slice.size
+        total_slice = packer.to_slice
+        length = total_slice.size
 
         message = IO::Memory.new.tap { |io|
-          io.write_bytes length.to_u16, IO::ByteFormat::BigEndian
-          io.write slice
+          offset = 0
+          while length - offset > 0
+            slice = total_slice[offset, {(length - offset), 0xFFFF}.min]
+            io.write_bytes(slice.size.to_u16, IO::ByteFormat::BigEndian)
+            io.write slice
+            offset += 0xFFFF
+          end
           io.write_bytes 0x0000.to_u16, IO::ByteFormat::BigEndian
         }.to_slice
         @connection.write message

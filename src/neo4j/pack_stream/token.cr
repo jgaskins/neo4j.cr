@@ -19,7 +19,7 @@ module Neo4j
       property string_value
       property int_value : Int8 | Int16 | Int32 | Int64
       property float_value : Float64
-      property size : UInt16
+      property size : UInt64
       property used
 
       def initialize
@@ -33,7 +33,7 @@ module Neo4j
       end
 
       def size=(size)
-        @size = size.to_u16
+        @size = size.to_u64
       end
 
       def to_s(io)

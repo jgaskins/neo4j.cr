@@ -89,6 +89,15 @@ module Neo4j
           CYPHER
         end
 
+        it "handles sending and receiving large queries" do
+          big_array = (0..1_000_000).to_a
+          result = connection.exec_cast "RETURN $value",
+            { value: big_array },
+            {Array(Int32)}
+
+          result.first.first.should eq big_array
+        end
+
         it "handles exceptions" do
           begin
             connection.execute "omg lol"
