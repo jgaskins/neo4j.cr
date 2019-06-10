@@ -1,7 +1,37 @@
-require "../../../spec_helper"
+require "../../spec_helper"
 require "uuid"
 
-require "../../../../src/neo4j/bolt/connection"
+require "../../../src/neo4j/bolt/connection"
+require "../../../src/neo4j/mapping"
+
+struct TestNode
+  Neo4j.map_node(
+    id: UUID,
+    name: String,
+  )
+end
+
+struct Product
+  Neo4j.map_node(
+    id: UUID,
+    name: String,
+  )
+end
+
+struct Category
+  Neo4j.map_node(
+    id: UUID,
+    name: String,
+  )
+end
+
+struct SomethingElse
+  Neo4j.map_node(
+    id: UUID,
+    name: String,
+    foo: Int32,
+  )
+end
 
 module Neo4j
   module Bolt
@@ -57,6 +87,15 @@ module Neo4j
             MATCH (user:User { id: $user_id })-[membership:MEMBER_OF]->(group:Group { id: $group_id })
             DELETE user, membership, group
           CYPHER
+        end
+
+        it "handles sending and receiving large queries" do
+          big_array = (0..1_000_000).to_a
+          result = connection.exec_cast "RETURN $value",
+            { value: big_array },
+            {Array(Int32)}
+
+          result.first.first.should eq big_array
         end
 
         it "handles exceptions" do
@@ -179,6 +218,178 @@ module Neo4j
             results.count(&.itself).should eq 0 # Now there are none left
 
             txn.rollback
+          end
+        end
+
+        describe "deserializing nodes as the specified type" do
+          it "deserializes ints" do
+            values = connection.exec_cast("return 12, 42, 500, 2000000000000", { Int8, Int16, Int32, Int64 })
+            values.should be_a Array(Tuple(Int8, Int16, Int32, Int64))
+            values.should eq [{ 12, 42, 500, 2_000_000_000_000 }]
+
+            # Test multiple rows and multiple values returned
+            values = connection.exec_cast(<<-CYPHER, { Int8, Int16 })
+              UNWIND range(1, 2) AS value
+              UNWIND range(1, 2) AS second_value
+              RETURN value, second_value
+            CYPHER
+            values.should eq [{1, 1}, {1, 2}, {2, 1}, {2, 2}]
+          end
+
+          it "deserializes floats" do
+            values = connection.exec_cast("return 6.9", { Float64 })
+            values.should be_a Array(Tuple(Float64))
+            values.should eq [{ 6.9 }]
+          end
+
+          it "deserializes strings and booleans" do
+            values = connection.exec_cast "RETURN 'hello ' + $target, true",
+              parameters: Map { "target" => "world" },
+              types: { String, Bool }
+            values.should eq [{ "hello world", true }]
+          end
+
+          it "deserializes spatial types" do
+            values = connection.exec_cast(<<-CYPHER, { Point2D, LatLng, Point3D })
+              RETURN
+                point({ x: 69, y: 420 }),
+                point({ latitude: 39, longitude: -76 }),
+                point({ x: 1.1, y: 2.2, z: 3.3 })
+            CYPHER
+            p2d, latlng, p3d = values.first
+            p2d.x.should eq 69
+            p2d.y.should eq 420
+            latlng.latitude.should eq 39.0
+            latlng.longitude.should eq -76.0
+            p3d.x.should eq 1.1
+            p3d.y.should eq 2.2
+            p3d.z.should eq 3.3
+          end
+
+          it "deserializes custom node types" do
+            connection.transaction do |txn|
+              id = connection
+                .execute("CREATE (node:TestNode { id: randomUUID(), name: 'Test' }) RETURN node.id")
+                .first
+                .first
+                .as(String)
+
+              values = connection.exec_cast "MATCH (node:TestNode { id: $id }) RETURN node",
+                { "id" => id },
+                { TestNode }
+
+              values.should be_a Array(Tuple(TestNode))
+              values.first.first.name.should eq "Test"
+
+              txn.rollback
+            end
+          end
+
+          it "deserializes arrays" do
+            connection.transaction do |txn|
+              id = UUID.random.to_s
+
+              connection.execute <<-CYPHER, id: id
+                CREATE (category:Category {
+                  id: $id,
+                  name: "Stuff"
+                })
+
+                CREATE (product1:Product {
+                  id: randomUUID(),
+                  name: "Thing 1"
+                })
+
+                CREATE (product2:Product {
+                  id: randomUUID(),
+                  name: "Thing 2"
+                })
+
+                CREATE (product1)-[:IN_CATEGORY]->(category)
+                CREATE (product2)-[:IN_CATEGORY]->(category)
+              CYPHER
+
+              results = connection.exec_cast(<<-CYPHER, { id: id }, { Category, Array(Product) })
+                MATCH (product:Product)-[:IN_CATEGORY]->(category:Category)
+                WHERE category.id = $id
+                RETURN category, collect(product)
+                LIMIT 1
+              CYPHER
+              result = results.first
+              category, products = result
+
+              category.should be_a Category
+              products.should be_a Array(Product)
+              category.id.should eq UUID.new(id)
+              category.name.should eq "Stuff"
+              product_names = products.map(&.name)
+              product_names.includes?("Thing 1").should eq true
+              product_names.includes?("Thing 2").should eq true
+
+              txn.rollback
+            end
+          end
+
+          it "supports union types for mapped nodes" do
+            connection.transaction do |txn|
+              id = connection.exec_cast(<<-CYPHER, { UUID })
+                CREATE (category : Category {
+                  id: randomUUID(),
+                  name: "Stuff"
+                })
+
+                CREATE (product : Product {
+                  id: randomUUID(),
+                  name: "My Product"
+                })
+
+                CREATE (something_else : SomethingElse {
+                  id: randomUUID(),
+                  name: "Foo",
+                  foo: 32
+                })
+
+                CREATE (product)-[:IN_CATEGORY]->(category)
+                CREATE (something_else)-[:IN_CATEGORY]->(category)
+
+                RETURN category.id
+              CYPHER
+                .first
+                .first
+
+              # pp connection.execute(<<-CYPHER, id: id.to_s)
+              #   MATCH (thing)-[:IN_CATEGORY]->(category : Category { id: $id })
+              #   RETURN thing
+              # CYPHER
+
+              results = connection.exec_cast(<<-CYPHER, Map { "id" => id.to_s }, { Product | SomethingElse })
+                MATCH (thing)-[:IN_CATEGORY]->(category : Category { id: $id })
+                RETURN thing
+                ORDER BY labels(thing)
+              CYPHER
+                .map(&.first)
+
+              results.should be_a Array(Product | SomethingElse)
+              results[0].should be_a Product
+              results[1].should be_a SomethingElse
+
+              txn.rollback
+            end
+          end
+
+          it "supports unions of primitive types" do
+            connection.transaction do |txn|
+              connection.exec_cast("RETURN 42", { Int32 | Int64 })
+                .first
+                .first
+                .should be_a Int64
+
+              connection.exec_cast("UNWIND [1, 'hello'] AS value RETURN value", { Int32 | String })
+                .map(&.first) # Unwrap the tuples
+                .should eq [1, "hello"]
+
+              txn.rollback
+            end
           end
         end
       end

@@ -1,7 +1,7 @@
 module Neo4j
   struct Node
     getter(
-      id : Int32,
+      id : Int64,
       labels : Array(String),
       properties : Map,
     )
@@ -12,9 +12,9 @@ module Neo4j
 
   struct Relationship
     getter(
-      id : Int32,
-      start : Int32,
-      end : Int32,
+      id : Int64,
+      start : Int64,
+      end : Int64,
       type : String,
       properties : Map,
     )
@@ -25,7 +25,7 @@ module Neo4j
 
   struct UnboundRelationship
     getter(
-      id : Int32,
+      id : Int64,
       type : String,
       properties : Map,
     )

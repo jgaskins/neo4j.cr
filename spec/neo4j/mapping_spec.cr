@@ -43,7 +43,7 @@ module Neo4j
   describe "mapping" do
     it "maps nodes to models" do
       model = MappingNodeExample.new(Node.new(
-        id: 123,
+        id: 123_i64,
         labels: ["Foo", "Bar"],
         properties: Map {
           "name" => "Jamie",
@@ -77,9 +77,9 @@ module Neo4j
 
     it "maps relationships to models" do
       model = MappingRelationshipExample.new(Relationship.new(
-        id: 123,
-        start: 456,
-        end: 789,
+        id: 123_i64,
+        start: 456_i64,
+        end: 789_i64,
         type: "FOO_BAR",
         properties: Map {
           "role" => "user",

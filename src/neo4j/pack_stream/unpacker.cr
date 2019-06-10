@@ -101,35 +101,30 @@ module Neo4j
 
         case structure_type
         when StructureTypes::Node.value
-          id = read_numeric.to_i32
-          labels = read_array.map(&.to_s)
-          props = read_hash
-            .each_with_object(Map.new) { |(k, v), h|
-              h[k.to_s] = v }
-          Node.new(id, labels, props)
+          Node.new(
+            id: read_numeric.to_i64,
+            labels: read_array.map(&.as(String)),
+            properties: read_hash.transform_keys(&.to_s),
+          )
         when StructureTypes::Relationship.value
           Relationship.new(
-            id: read_numeric.to_i32,
-            start: read_numeric.to_i32,
-            end: read_numeric.to_i32,
+            id: read_numeric.to_i64,
+            start: read_numeric.to_i64,
+            end: read_numeric.to_i64,
             type: read_string,
-            properties: read_hash
-              .each_with_object(Map.new) { |(k, v), h|
-                h[k.to_s] = v }
+            properties: read_hash.transform_keys(&.to_s),
           )
         when StructureTypes::Path.value
           Path.new(
-            nodes: read_array.map { |node| node.as(Node) },
+            nodes: read_array.map(&.as(Node)),
             relationships: read_array.map(&.as(UnboundRelationship)),
             sequence: read_array.map(&.as(Int8)),
           )
         when StructureTypes::UnboundRelationship.value
           UnboundRelationship.new(
-            id: read_numeric.to_i32,
+            id: read_numeric.to_i64,
             type: read_string,
-            properties: read_hash
-              .each_with_object(Map.new) { |(k, v), h|
-                h[k.to_s] = v }
+            properties: read_hash.transform_keys(&.to_s),
           )
         when StructureTypes::Success.value
           Success.new(read_hash)
@@ -215,11 +210,11 @@ module Neo4j
         end
       end
 
-      private delegate token, to: @lexer
-      private delegate next_token, to: @lexer
+      delegate token, to: @lexer
+      delegate next_token, to: @lexer
       delegate prefetch_token, to: @lexer
 
-      private def check(token_type)
+      def check(token_type)
         unexpected_token(token_type) unless token.type == token_type
       end
 

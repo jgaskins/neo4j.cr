@@ -1,4 +1,4 @@
-require "../../../spec_helper"
+require "../../spec_helper"
 
 require "../../../src/neo4j/pack_stream"
 require "../../../src/neo4j/type"
@@ -82,22 +82,22 @@ module Neo4j
           location: ::Time::Location.load("America/New_York"),
         ),
         Node.new(
-          id: 123,
+          id: 123_i64,
           labels: ["Foo"],
-          properties: {
+          properties: Map {
             "foo" => "bar",
             "answer" => 42,
             "contrived" => true,
-          } of String => Type,
+          },
         ),
         Relationship.new(
-          id: 123,
-          start: 456,
-          end: 789,
+          id: 123_i64,
+          start: 456_i64,
+          end: 789_i64,
           type: "OMG_LOL",
-          properties: {
+          properties: Map {
             "one" => 1,
-          } of String => Type,
+          },
         ),
       }.each do |value|
         it "serializes and deserializes #{value.class}" do
