@@ -34,9 +34,9 @@ module Neo4j
   end
 
   macro map_relationship(__properties__)
-    getter relationship_id : Int32
-    getter node_start : Int32
-    getter node_end : Int32
+    getter relationship_id : Int64
+    getter node_start : Int64
+    getter node_end : Int64
     getter relationship_type : String
 
     ::Neo4j.map_props({{__properties__}}, ::Neo4j::Relationship)
@@ -47,7 +47,7 @@ module Neo4j
   end
 
   macro map_node(__properties__)
-    getter node_id : Int32
+    getter node_id : Int64
     getter node_labels : Array(String)
 
     ::Neo4j.map_props({{__properties__}}, ::Neo4j::Node)
