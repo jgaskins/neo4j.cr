@@ -1,6 +1,6 @@
-require "../../../spec_helper"
+require "../../spec_helper"
 
-require "../../../../src/neo4j/pack_stream"
+require "../../../src/neo4j/pack_stream"
 
 module Neo4j
   module PackStream
