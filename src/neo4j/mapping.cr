@@ -131,6 +131,9 @@ module Neo4j
         {% elsif value[:type].stringify.includes? "Int" %}
           {% int_bit_size = value[:type].stringify.gsub(/\D+/, "") %}
           @{{key.id}} = %property_value.as(Int).to_i{{int_bit_size.id}}{% if value[:nilable] %} if %property_value {% end %}
+        {% elsif value[:type].stringify.includes? "Array(" %}
+          {% array_type = value[:type].type_vars %}
+          @{{key.id}} = %property_value.as(Array).map { |value| value.as({{array_type.join(" | ").id}}) }
         {% elsif value[:converter] %}
           @{{value[:key_id]}} = {{value[:converter]}}.deserialize(%property_value)
         {% else %}

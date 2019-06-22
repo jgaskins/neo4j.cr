@@ -33,6 +33,12 @@ struct SomethingElse
   )
 end
 
+struct Zone
+  Neo4j.map_node(
+    polygon: Array(Neo4j::LatLng),
+  )
+end
+
 module Neo4j
   module Bolt
     run_integration_specs = ENV["NEO4J_URL"]?
@@ -387,6 +393,26 @@ module Neo4j
               connection.exec_cast("UNWIND [1, 'hello'] AS value RETURN value", { Int32 | String })
                 .map(&.first) # Unwrap the tuples
                 .should eq [1, "hello"]
+
+              txn.rollback
+            end
+          end
+
+          it "deserializes arrays of properties into mapped nodes" do
+            connection.transaction do |txn|
+              connection.exec_cast <<-CYPHER,
+                CREATE (zone:Zone { polygon: $polygon })
+                RETURN zone
+              CYPHER
+                {
+                  polygon: [
+                    LatLng.new(39, -76),
+                    LatLng.new(40, -76),
+                    LatLng.new(40, -75),
+                    LatLng.new(39, -75),
+                  ],
+                },
+                { Zone }
 
               txn.rollback
             end
