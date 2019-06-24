@@ -73,6 +73,18 @@ module Neo4j
           CYPHER
         end
 
+        it "allows passing a block to #execute" do
+          values = Array(Int8).new
+          result = connection.execute <<-CYPHER, start: 1, end: 10 do |(result)|
+            UNWIND range($start, $end) AS index
+            RETURN index
+          CYPHER
+            values << result.as Int8
+          end
+
+          values.should eq (1..10).to_a
+        end
+
         it "handles nodes and relationships" do
           user_id = UUID.random.to_s
           group_id = UUID.random.to_s
@@ -415,6 +427,21 @@ module Neo4j
                 { Zone }
 
               txn.rollback
+            end
+          end
+
+          it "deserializes and passes to a block" do
+            connection.transaction do |txn|
+              values = Array(Int8).new
+
+              connection.exec_cast <<-CYPHER, { max: 100 }, { Int8 } do |(value)|
+                UNWIND range(1, $max) AS index
+                RETURN index
+              CYPHER
+                values << value
+              end
+
+              values.should eq (1..100).to_a
             end
           end
         end

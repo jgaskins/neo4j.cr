@@ -101,7 +101,7 @@ module Neo4j
     end
   end
 
-  alias ValueType =
+  alias Value =
     Nil |
     Bool |
     String |
@@ -118,13 +118,13 @@ module Neo4j
     Relationship |
     UnboundRelationship |
     Path |
-    Array(ValueType) |
-    Hash(String, ValueType)
+    Array(Value) |
+    Hash(String, Value)
 
-  alias List = Array(ValueType)
-  alias Map = Hash(String, ValueType)
+  alias List = Array(Value)
+  alias Map = Hash(String, Value)
 
-  alias ResponseType = Success | Failure | Ignored
+  alias Response = Success | Failure | Ignored
 
-  alias Type = ValueType | ResponseType
+  alias Type = Value | Response
 end

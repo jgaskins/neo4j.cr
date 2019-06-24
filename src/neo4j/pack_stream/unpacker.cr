@@ -79,7 +79,7 @@ module Neo4j
         next_token if fetch_next_token
         check Token::Type::Array
         List.new(token.size.to_i32) do
-          read_value.as(ValueType)
+          read_value.as(Value)
         end
       end
 
@@ -88,7 +88,7 @@ module Neo4j
         check Token::Type::Hash
         hash = Map.new(initial_capacity: token.size.to_i32)
         token.size.times do
-          hash[read_string] = read_value.as(ValueType)
+          hash[read_string] = read_value.as(Value)
         end
         hash
       end
@@ -170,8 +170,8 @@ module Neo4j
         # when STRUCTURE_TYPES[:duration]
         #   Time::Span.new(months: read_int, days: read_int, seconds: read_int, nanoseconds: read_int)
         else
-          Array(ValueType).new(token.size) do
-            read_value.as ValueType
+          Array(Value).new(token.size) do
+            read_value.as Value
           end
         end
       end

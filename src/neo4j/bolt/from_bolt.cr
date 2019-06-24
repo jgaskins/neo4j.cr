@@ -45,7 +45,21 @@ module Neo4j
 end
 
 def UUID.from_bolt(io)
-  UUID.new(String.from_bolt(io))
+  new(String.from_bolt(io))
+end
+
+struct Tuple
+  def from_bolt(io)
+    # results = Array({{ TYPES.type_vars.map(&.stringify.gsub(/\.class$/, "").id).stringify.tr("[]", "{}").id }}).new
+
+    {% begin %}
+      {
+        {% for type in T.map(&.stringify.gsub(/\.class$/, "").id) %}
+          {{type}}.from_bolt(io),
+        {% end %}
+      }
+    {% end %}
+  end
 end
 
 def Union.from_bolt(io)
