@@ -292,12 +292,23 @@ module Neo4j
       end
 
       private def send(command : Commands, *fields)
+        retryable_send command, fields
+      end
+
+      private def retryable_send(command, fields, retries = 5)
         write_message do |msg|
           msg.write_structure_start fields.size
           msg.write_byte command
           fields.each do |field|
             msg.write field
           end
+        end
+      rescue ex : IO::EOFError | OpenSSL::SSL::Error | Errno
+        if retries > 0
+          initialize @uri, @ssl
+          retryable_send command, fields, retries - 1
+        else
+          raise ex
         end
       end
 
