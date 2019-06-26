@@ -34,8 +34,9 @@ connection = Neo4j::Bolt::Connection.new(
 
 The `connection` has the following public methods:
 
-- `execute(query : String, params = ({} of String => Neo4j::Type)) : Neo4j::Result`
-- `stream(query : String, params = ({} of String => Neo4j::Type)) : Neo4j::StreamingResult`
+- `execute(query : String, params = Neo4j::Map.new) : Neo4j::Result`
+- `stream(query : String, params = Neo4j::Map.new) : Neo4j::StreamingResult`
+- `exec_cast(query : String, params : Neo4j::Map, types : Tuple(*TYPES) : Neo4j::Result`
 - `transaction(&block)`
 - `reset`
 
