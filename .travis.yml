@@ -1,7 +1,7 @@
 language: crystal
 before_install:
-  - curl https://neo4j.com/artifact.php?name=neo4j-community-3.5.2-unix.tar.gz > neo4j.tar.gz
+  - curl https://neo4j.com/artifact.php?name=neo4j-community-3.5.6-unix.tar.gz > neo4j.tar.gz
   - tar -zxf neo4j.tar.gz
-  - cd neo4j-community-3.5.2
+  - cd neo4j-community-3.5.6
   - bin/neo4j start
-  - while [ $? -ne 0 ]; do curl -I http://localhost:7474 |head -1 | grep 200; done
+  - while [ $? -ne 0 ]; do curl -I http://localhost:7474 |head -1 | grep 200; sleep 0.5; done
