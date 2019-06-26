@@ -98,25 +98,27 @@ module Neo4j
       end
 
       def execute(query, parameters : Map, &block : List ->)
-        send Commands::Run, "BEGIN", Map.new
-        send Commands::PullAll
-        send Commands::Run, query, parameters
-        send Commands::PullAll
-        send Commands::Run, "COMMIT", Map.new
-        send Commands::PullAll
+        retry 5 do
+          send Commands::Run, "BEGIN", Map.new
+          send Commands::PullAll
+          send Commands::Run, query, parameters
+          send Commands::PullAll
+          send Commands::Run, "COMMIT", Map.new
+          send Commands::PullAll
 
-        read_result # BEGIN
-        read_result # PULL_ALL
-        read_result # RUN
-        result = read_result
-        until result.is_a?(Neo4j::Response)
-          yield result.as(List)
+          read_result # BEGIN
+          read_result # PULL_ALL
+          read_result # RUN
           result = read_result
-        end
-        read_result # COMMIT
-        read_result # PULL_ALL
+          until result.is_a?(Neo4j::Response)
+            yield result.as(List)
+            result = read_result
+          end
+          read_result # COMMIT
+          read_result # PULL_ALL
 
-        result.as Response
+          result.as Response
+        end
       end
 
       def execute(query, parameters : Map)
@@ -142,26 +144,28 @@ module Neo4j
       end
 
       def exec_cast(query : String, parameters : Map, types : Tuple(*TYPES), &block) : Nil forall TYPES
-        send Commands::Run, query, parameters
-        send Commands::PullAll
+        retry 5 do
+          send Commands::Run, query, parameters
+          send Commands::PullAll
 
-        result = read_result
-        if result.is_a? Failure
-          raise ::Neo4j::QueryException.new(result.attrs["message"].as(String), result.attrs["code"].as(String))
-        end
-
-        result = read_raw_result
-
-        until result[1] != 0x71
-          # First 3 bytes are Structure, Record, and List
-          # TODO: If the RETURN clause in the query has more than 16 items,
-          # this will break because the List byte marker and its size won't be
-          # in a single byte. We'll need to detect this here.
-          io = IO::Memory.new(result + 3)
-
-          yield types.from_bolt(io)
+          result = read_result
+          if result.is_a? Failure
+            raise ::Neo4j::QueryException.new(result.attrs["message"].as(String), result.attrs["code"].as(String))
+          end
 
           result = read_raw_result
+
+          until result[1] != 0x71
+            # First 3 bytes are Structure, Record, and List
+            # TODO: If the RETURN clause in the query has more than 16 items,
+            # this will break because the List byte marker and its size won't be
+            # in a single byte. We'll need to detect this here.
+            io = IO::Memory.new(result + 3)
+
+            yield types.from_bolt(io)
+
+            result = read_raw_result
+          end
         end
       end
 
@@ -292,23 +296,12 @@ module Neo4j
       end
 
       private def send(command : Commands, *fields)
-        retryable_send command, fields
-      end
-
-      private def retryable_send(command, fields, retries = 5)
         write_message do |msg|
           msg.write_structure_start fields.size
           msg.write_byte command
           fields.each do |field|
             msg.write field
           end
-        end
-      rescue ex : IO::EOFError | OpenSSL::SSL::Error | Errno
-        if retries > 0
-          initialize @uri, @ssl
-          retryable_send command, fields, retries - 1
-        else
-          raise ex
         end
       end
 
@@ -395,6 +388,19 @@ module Neo4j
 
       private def send_message(bytes : Bytes)
         @connection.write bytes
+      end
+
+      private def retry(times)
+        loop do
+          return yield
+        rescue ex : IO::EOFError | OpenSSL::SSL::Error | Errno
+          if times > 0
+            initialize @uri, @ssl
+            times -= 1
+          else
+            raise ex
+          end
+        end
       end
     end
   end
