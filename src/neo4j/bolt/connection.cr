@@ -129,6 +129,14 @@ module Neo4j
         end
       end
 
+      def execute(query, **params)
+        params_hash = Map.new
+
+        params.each { |key, value| params_hash[key.to_s] = value }
+
+        execute query, params_hash
+      end
+
       def exec_cast(query : String, types : Tuple(*TYPES)) forall TYPES
         exec_cast query, Map.new, types
       end
@@ -179,14 +187,6 @@ module Neo4j
 
           results
         {% end %}
-      end
-
-      def execute(query, **params)
-        params_hash = Map.new
-
-        params.each { |key, value| params_hash[key.to_s] = value }
-
-        execute query, params_hash
       end
 
       def transaction
