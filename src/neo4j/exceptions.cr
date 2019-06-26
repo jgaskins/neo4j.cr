@@ -16,6 +16,9 @@ module Neo4j
     end
   end
 
+  class IndexAlreadyExists < QueryException
+  end
+
   class RollbackException < Exception
   end
 

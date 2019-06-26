@@ -280,7 +280,7 @@ module Neo4j
         result = read_result
         case result
         when Failure
-          raise ::Neo4j::QueryException.new(result.attrs["message"].as(String), result.attrs["code"].as(String))
+          handle_result result
         when Success, Ignored
           result
         else
@@ -325,10 +325,28 @@ module Neo4j
 
       private def read_result
         PackStream.unpack(read_raw_result).tap do |result|
-          if result.is_a? Failure
-            raise ::Neo4j::QueryException.new(result.attrs["message"].as(String), result.attrs["code"].as(String))
+          case result
+          when Response
+            handle_result result
           end
         end
+      end
+
+      EXCEPTIONS = {
+        "Neo.ClientError.Schema.IndexAlreadyExists" => IndexAlreadyExists,
+      }
+      private def handle_result(result : Failure)
+        exception_class = EXCEPTIONS[result.attrs["code"]]? || QueryException
+        raise exception_class.new(
+          result.attrs["message"].as(String),
+          result.attrs["code"].as(String),
+        )
+      end
+
+      private def handle_result(result : Ignored)
+      end
+
+      private def handle_result(result : Success)
       end
 
       # Read a single result from the server in 64kb chunks. This is a bit of a

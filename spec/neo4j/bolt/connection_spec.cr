@@ -119,8 +119,19 @@ module Neo4j
         it "handles exceptions" do
           begin
             connection.execute "omg lol"
-          rescue Neo4j::QueryException
+          rescue QueryException
             # we did this on purpose
+          end
+
+          begin
+            connection.execute "create index on :Foo(id)"
+            connection.execute "create constraint on (foo:Foo) assert foo.id is unique"
+            raise Exception.new("Creating duplicate constraint did not ")
+          rescue ex : IndexAlreadyExists
+          rescue ex
+            raise Exception.new("Expected IndexAlreadyExists, got #{ex.inspect}")
+          ensure
+            connection.execute "drop index on :Foo(id)"
           end
 
           result = connection.execute "return 42"
