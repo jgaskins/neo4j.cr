@@ -50,8 +50,6 @@ end
 
 struct Tuple
   def from_bolt(io)
-    # results = Array({{ TYPES.type_vars.map(&.stringify.gsub(/\.class$/, "").id).stringify.tr("[]", "{}").id }}).new
-
     {% begin %}
       {
         {% for type in T.map(&.stringify.gsub(/\.class$/, "").id) %}
