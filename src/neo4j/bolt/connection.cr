@@ -334,6 +334,7 @@ module Neo4j
 
       EXCEPTIONS = {
         "Neo.ClientError.Schema.IndexAlreadyExists" => IndexAlreadyExists,
+        "Neo.ClientError.Schema.ConstraintValidationFailed" => ConstraintValidationFailed,
       }
       private def handle_result(result : Failure)
         exception_class = EXCEPTIONS[result.attrs["code"]]? || QueryException
