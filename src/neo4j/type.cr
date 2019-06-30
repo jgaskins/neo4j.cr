@@ -80,6 +80,37 @@ module Neo4j
   struct Ignored
   end
 
+  struct Duration
+    getter months, days, seconds, nanoseconds
+    @months : Integer
+    @days : Integer
+    @seconds : Integer
+    @nanoseconds : Integer
+
+    def initialize(
+      years,
+      months,
+      weeks,
+      days,
+      hours,
+      minutes,
+      seconds,
+      milliseconds,
+      microseconds,
+      nanoseconds,
+    )
+      initialize(
+        months: (years * 12) + months,
+        days: (weeks * 7) + days,
+        seconds: (hours * 3600) + (minutes * 60) + seconds,
+        nanoseconds: (milliseconds * 1_000_000) + (microseconds * 1_000) + nanoseconds,
+      )
+    end
+
+    def initialize(@months, @days, @seconds, @nanoseconds)
+    end
+  end
+
   struct Point2D
     getter x, y, type
 
@@ -101,16 +132,20 @@ module Neo4j
     end
   end
 
+  alias Integer =
+    Int8 |
+    Int16 |
+    Int32 |
+    Int64
+
   alias Value =
     Nil |
     Bool |
     String |
-    Int8 |
-    Int16 |
-    Int32 |
-    Int64 |
+    Integer |
     Float64 |
     Time |
+    Duration |
     Point2D |
     Point3D |
     LatLng |
@@ -127,4 +162,14 @@ module Neo4j
   alias Response = Success | Failure | Ignored
 
   alias Type = Value | Response
+end
+
+struct Time
+  def +(duration : Neo4j::Duration)
+    self + duration.nanoseconds.nanoseconds + duration.seconds.seconds + duration.days.days + duration.months.months
+  end
+
+  def -(duration : Neo4j::Duration)
+    self - duration.nanoseconds.nanoseconds - duration.seconds.seconds - duration.days.days - duration.months.months
+  end
 end

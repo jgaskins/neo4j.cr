@@ -166,9 +166,8 @@ module Neo4j
             z: read_float,
           )
 
-        # TODO: Figure out how to represent Time::Span and Time::MonthSpan in the same object
-        # when STRUCTURE_TYPES[:duration]
-        #   Time::Span.new(months: read_int, days: read_int, seconds: read_int, nanoseconds: read_int)
+        when StructureTypes::Duration.value
+          Duration.new(months: read_int, days: read_int, seconds: read_int, nanoseconds: read_int)
         else
           Array(Value).new(token.size) do
             read_value.as Value

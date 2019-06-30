@@ -166,6 +166,15 @@ module Neo4j
         self
       end
 
+      def write(duration : Duration)
+        write_structure_start 4
+        write_byte Unpacker::StructureTypes::Duration.value
+        write duration.months
+        write duration.days
+        write duration.seconds
+        write duration.nanoseconds
+      end
+
       def write(point : Point2D)
         write_structure_start 3
         write_byte Unpacker::StructureTypes::Point2D.value
