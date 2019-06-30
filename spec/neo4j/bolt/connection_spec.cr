@@ -207,9 +207,21 @@ module Neo4j
         end
 
         it "deserializes values" do
-          connection.execute(<<-CYPHER).first.tap do |(datetime, duration, point2d, latlng, point3d)|
+          connection.execute(<<-CYPHER).first.tap do |(datetime_offset, datetime_tz, duration, point2d, latlng, point3d)|
             RETURN
-              datetime('2019-02-16T22:32:40.999Z'),
+              datetime('2019-02-16T22:32:40.999-05:00'),
+              datetime({
+                year: 2019,
+                month: 2,
+                day: 16,
+                hour: 22,
+                minute: 32,
+                second: 40,
+                millisecond: 123,
+                microsecond: 456,
+                nanosecond: 789,
+                timezone: 'America/New_York'
+              }),
               duration({
                 years: 1,
                 months: 2,
@@ -226,7 +238,7 @@ module Neo4j
               point({ latitude: 39, longitude: -76 }),
               point({ x: 1, y: 2, z: 3 })
           CYPHER
-            datetime.should eq Time.new(
+            datetime_offset.should eq Time.new(
               year: 2019,
               month: 2,
               day: 16,
@@ -234,7 +246,17 @@ module Neo4j
               minute: 32,
               second: 40,
               nanosecond: 999_000_000,
-              location: Time::Location.load("UTC"),
+              location: Time::Location.load("America/New_York"),
+            )
+            datetime_tz.should eq Time.new(
+              year: 2019,
+              month: 2,
+              day: 16,
+              hour: 22,
+              minute: 32,
+              second: 40,
+              nanosecond: 123_456_789,
+              location: Time::Location.load("America/New_York"),
             )
             duration.should eq Duration.new(
               years: 1,

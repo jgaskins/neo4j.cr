@@ -17,7 +17,8 @@ module Neo4j
         Ignored             = 0x7e
 
         # Temporal Types
-        DateTime            = 0x46
+        DateTimeWithOffset  = 0x46
+        DateTimeWithTZ      = 0x66
         LocalDateTime       = 0x64
         Date                = 0x44
         LocalTime           = 0x74
@@ -136,7 +137,7 @@ module Neo4j
           read_value
 
         # Date/time types
-        when StructureTypes::DateTime.value
+        when StructureTypes::DateTimeWithOffset.value
           time = Time.unix(read_int) + read_int.nanoseconds
           offset = read_int.to_i32
           (time - offset.seconds).in(Time::Location.fixed(offset))
@@ -165,9 +166,19 @@ module Neo4j
             y: read_float,
             z: read_float,
           )
-
         when StructureTypes::Duration.value
-          Duration.new(months: read_int, days: read_int, seconds: read_int, nanoseconds: read_int)
+          Duration.new(
+            months: read_int,
+            days: read_int,
+            seconds: read_int,
+            nanoseconds: read_int,
+          )
+
+        when StructureTypes::DateTimeWithTZ.value
+          seconds = read_int.to_i64
+          nanoseconds = read_int.to_i32
+          location = Time::Location.load(read_string)
+          Time.new(year: 1970, month: 1, day: 1, location: location) + seconds.seconds + nanoseconds.nanoseconds
         else
           Array(Value).new(token.size) do
             read_value.as Value

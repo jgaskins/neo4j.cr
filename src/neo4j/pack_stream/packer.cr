@@ -159,7 +159,7 @@ module Neo4j
 
       def write(time : Time)
         write_structure_start 3
-        write_byte Unpacker::StructureTypes::DateTime.value
+        write_byte Unpacker::StructureTypes::DateTimeWithOffset.value
         write time.to_unix.to_i64 + time.offset.to_i32
         write time.nanosecond.to_i32
         write time.offset.to_i32
