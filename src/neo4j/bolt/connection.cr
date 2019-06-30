@@ -129,7 +129,7 @@ module Neo4j
         end
       end
 
-      def execute(query, **params)
+      def execute(_query query, **params)
         params_hash = Map.new
 
         params.each { |key, value| params_hash[key.to_s] = value }
