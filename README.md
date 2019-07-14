@@ -71,6 +71,51 @@ end
 
 Note that we cast the values returned from the query into `Neo4j::Node`. Each value returned from a query can be any Neo4j data type and cannot be known at compile time, so we have to cast the values into the types we know them to be — in this case, we are returning nodes.
 
+### `exec_cast(query : String, params : Neo4j::Map, types : Tuple(*T)) forall T`
+
+Executes the given Cypher query, passing the given params and deserializing directly into the given types, known at compile time.
+
+```crystal
+result = connection.exec_cast <<-CYPHER, { "id" => user_id }, {Int32}
+  MATCH (post:Post)-[:WRITTEN_BY]->(:Author { id: $id })
+  RETURN count(post)
+CYPHER
+
+result.first # {12}
+```
+
+You can also pass your own node- or relationship-mapped types:
+
+```crystal
+struct User
+  Neo4j.map_node(id: UUID, name: String)
+end
+
+struct Following
+  Neo4j.map_relationship(since: Time)
+end
+
+results = connection.exec_cast <<-CYPHER, { "id" => user_id }, {User, Following}
+  MATCH (follower:User)-[following:FOLLOWS]->(:User { id: $id })
+  RETURN follower, following
+CYPHER
+
+results.each do |(follower, following)|
+  # No need to type-cast, their compile-time types are already User and Following
+  pp follower_id: follower.id, since: following.since
+end
+```
+
+If you'd like to stream results instead of working with the collection of all objects in memory at once, you can pass a block (the same block that you would pass to `result.each`):
+
+```crystal
+connection.exec_cast query, {id: user_id}, {User, Following} do |(follower, following)|
+  pp follower_id: follower.id, since: following.since
+end
+```
+
+This version of the method keeps memory consumption low and reduces the time to process your first result.
+
 ### `transaction(&block)`
 
 Executes the block within the context of a Neo4j transaction. At the end of the block, the transaction is committed. If an exception is raised, the transaction will be rolled back and the connection will be reset to a clean state.
@@ -78,7 +123,7 @@ Executes the block within the context of a Neo4j transaction. At the end of the 
 Example:
 
 ```crystal
-connection.transaction do
+connection.transaction do |txn|
   query = <<-CYPHER
     CREATE (user:User {
       uuid: $uuid,
@@ -184,7 +229,7 @@ These have a 1:1 mapping to nodes in your graph.
 - `end : Int32`: the internal id of the node this relationship points to
 - `properties : Hash(String, Neo4j::Type)`: the properties assigned to this relationship
 
-### `Neo4j::Type`
+### `Neo4j::Value`
 
 Represents any data type that can be stored in a Neo4j database and communicated via the Bolt protocol. It's a shorthand for this union type:
 
@@ -197,15 +242,16 @@ Int16 |
 Int32 |
 Int64 |
 Float64 |
-Array(Neo4j::Type) |
-Hash(String, Neo4j::Type) |
+Time |
+Neo4j::Point2D |
+Neo4j::Point3D |
+Neo4j::LatLng |
+Array(Neo4j::Value) |
+Hash(String, Neo4j::Value) |
 Neo4j::Node |
 Neo4j::Relationship |
 Neo4j::UnboundRelationship |
-Neo4j::Path |
-Neo4j::Success |
-Neo4j::Failure |
-Neo4j::Ignored
+Neo4j::Path
 ```
 
 ### Mapping to Domain Objects
@@ -245,41 +291,22 @@ end
 With these in place, you can build them from your nodes and relationships:
 
 ```crystal
-result = connection.execute(<<-CYPHER, { "uuid" => params["uuid"] })
+result = connection.exec_cast(<<-CYPHER, { "uuid" => params["uuid"] }, {Product, CartItem})
   MATCH (product:Product)-[cart_item:IN_CART]->(user:User { uuid: $uuid })
   RETURN product, cart_item
 CYPHER
 
-cart = Cart.new(result.map { |(product, cart_item)|
-  {
-    product: Product.new(product.as(Neo4j::Node)),
-    cart_item: CartItem.new(cart_item.as(Neo4j::Relationship)),
-  }
-})
+cart = Cart.new(result.to_a)
 ```
-
-### Caveats/Limitations
-
-- Certain types like `Point`, `Time`, `DateTime`, `LocalTime`, `LocalDateTime` are not available in Bolt yet
-  - They will be added when the Bolt spec is updated to include them
-- This is still relatively early development, so while it supports a lot of functionality, some APIs might change as improvements are discovered
-  - For example, `transaction` doesn't yield a transaction and everything is just called on the connection, which is not ideal, so this is pretty likely to change
 
 ## Future development
 
-- I'd like to support query pipelining
-  - Send multiple queries, commands, etc, before reading the result from any of them. This could be useful for transactions where we don't try to consume the results until the end of the transaction.
-  - The idea is that we don't spend time waiting on a response from a query if we can just pick it up later
-  - If a query error occurs, the server will send `Ignored` results back to us until we acknowledge the failure, so there is no special processing needed for this occurrence
-- Streaming results, letting us send a query and consume its result lazily
-  - For example, if we query 1000 results, we could defer deserializing them until the application needs them, potentially saving on processing
-  - I don't know if this would be the default
 - `bolt+routing`
   - I'm checking out the Java driver to see how they handle routing between core servers in Enterprise clusters
 
 ## Acknowledgements/Credits
 
-This implementation is _heavily_ based on [@benoist](https://github.com/benoist)'s [implementation of MessagePack](https://github.com/crystal-community/msgpack-crystal). I had never built a binary protocol parser in a statically typed language before, so it really helped jump-start the development of this project.
+This implementation is _heavily_ based on [@benoist](https://github.com/benoist)'s [implementation of MessagePack](https://github.com/crystal-community/msgpack-crystal) to understand how to serialize and deserialize a binary protocol in Crystal.
 
 ## Contributing
 
