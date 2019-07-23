@@ -519,6 +519,32 @@ module Neo4j
             end
           end
 
+          it "returns single results" do
+            connection.transaction do |txn|
+              result = connection.exec_cast_single <<-CYPHER, Map.new, {Int32}
+                RETURN 42
+              CYPHER
+              result.should eq({42})
+              result.first.to_u8.should eq 42
+
+              result = connection.exec_cast_single <<-CYPHER, Map.new, {String}
+                RETURN "Hello"
+              CYPHER
+              result.should eq({"Hello"})
+              # Make sure its compile-time type is a string
+              result.first.upcase.should eq "HELLO"
+            end
+          end
+
+          it "returns single scalar results" do
+            connection.exec_cast_scalar(<<-CYPHER, Map.new, Int32).should eq 42
+              RETURN 42
+            CYPHER
+            connection.exec_cast_scalar(<<-CYPHER, Map.new, String).should eq "Hello"
+              RETURN 'Hello'
+            CYPHER
+          end
+
           it "deserializes nilable values" do
             connection.transaction do |txn|
               connection.exec_cast_single <<-CYPHER, Map.new, {Subscription, Subscription}

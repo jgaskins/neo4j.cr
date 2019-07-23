@@ -195,6 +195,23 @@ module Neo4j
         {% end %}
       end
 
+      def exec_cast_single(query : String, parameters : Map, types : Tuple(*TYPES)) forall TYPES
+        handled = false
+        result = nil
+        exec_cast query, parameters, types do |row|
+          unless handled
+            result = row
+            handled = true
+          end
+        end
+
+        result.not_nil!
+      end
+
+      def exec_cast_scalar(query : String, parameters : Map, type : T) forall T
+        exec_cast_single(query, parameters, {type}).first
+      end
+
       def transaction
         if @transaction
           raise NestedTransactionError.new("Transaction already open, cannot open a new transaction")
