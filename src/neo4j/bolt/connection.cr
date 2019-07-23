@@ -94,7 +94,13 @@ module Neo4j
       end
 
       def execute(_query, **parameters, &block : List ->)
-        execute _query, parameters.to_h.transform_keys(&.to_s), &block
+        params_hash = Map.new
+
+        parameters.each do |key, value|
+          params_hash[key.to_s] = value
+        end
+
+        execute _query, params_hash, &block
       end
 
       def execute(query, parameters : Map, &block : List ->)

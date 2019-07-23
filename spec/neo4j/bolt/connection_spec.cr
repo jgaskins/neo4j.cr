@@ -39,6 +39,23 @@ struct Zone
   )
 end
 
+struct Subscription
+  Neo4j.map_node(
+    id: UUID,
+    amount_cents: Int32,
+    last_billed_at: Time,
+    next_bill_at: Time,
+    frequency: Neo4j::Duration,
+  )
+end
+
+struct User
+  Neo4j.map_node(
+    id: UUID,
+    name: String,
+  )
+end
+
 module Neo4j
   module Bolt
     run_integration_specs = ENV["NEO4J_URL"]?
@@ -499,6 +516,51 @@ module Neo4j
               end
 
               values.should eq (1..100).to_a
+            end
+          end
+
+          it "deserializes nilable values" do
+            connection.transaction do |txn|
+              connection.exec_cast_single <<-CYPHER, Map.new, {Subscription, Subscription}
+                CREATE (affiliated:Subscription {
+                  id: randomUUID(),
+                  amount_cents: 10000,
+                  last_billed_at: datetime({ year: 2019, month: 1, day: 1 }),
+                  next_bill_at: datetime(),
+                  frequency: duration({ months: 1 })
+                })-[:FOR_USER]->(:User {
+                  id: randomUUID(),
+                  name: 'Jamie'
+                })
+
+                CREATE (unaffiliated:Subscription {
+                  id: randomUUID(),
+                  amount_cents: 5000,
+                  last_billed_at: datetime({ year: 2019, month: 1, day: 1 }),
+                  next_bill_at: datetime(),
+                  frequency: duration({ months: 1 })
+                })
+
+                RETURN affiliated, unaffiliated
+              CYPHER
+
+              query = <<-CYPHER
+                MATCH (subscription:Subscription)
+                OPTIONAL MATCH (subscription)-[:FOR_USER]->(user:User)
+                RETURN subscription, user
+              CYPHER
+
+              connection.exec_cast query, Map{"id" => "123"}, {Subscription, User?} do |(subscription, user)|
+                if subscription.amount_cents == 100_00
+                  pp user
+                  user.should be_a User
+                elsif subscription.amount_cents == 50_00
+                  pp user
+                  user.should eq nil
+                end
+              end
+
+              txn.rollback
             end
           end
         end

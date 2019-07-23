@@ -66,7 +66,7 @@ def Union.from_bolt(io)
     unpacker.prefetch_token
     token = unpacker.token
 
-    {% non_primitive_types = T.reject { |type| [Bool, Int8, Int16, Int32, Int64, Float64, String].includes? type } %}
+    {% non_primitive_types = T.reject { |type| [Nil, Bool, Int8, Int16, Int32, Int64, Float64, String].includes? type } %}
 
     {% if T.includes? Bool %}
       return unpacker.read_bool if token.type.bool?
@@ -93,9 +93,13 @@ def Union.from_bolt(io)
     {% if non_primitive_types.empty? %}
       raise ::Neo4j::UnknownType.new("Don't know how to cast #{unpacker.read_value.inspect} into #{{{T.join(" | ")}}}")
     {% else %}
-      structure = unpacker.read_structure
-      {% for type in T %}
+      structure = unpacker.read_value
+      {% for type in non_primitive_types %}
         case structure
+        {% if T.includes? Nil %}
+          when Nil
+            return nil
+        {% end %}
         when ::Neo4j::Node
           return {{type}}.new structure if structure.labels.includes? {{type.stringify}}
         end
