@@ -29,14 +29,23 @@ module Neo4j
         initialize "bolt://neo4j:neo4j@localhost:7687", ssl: false
       end
 
-      def initialize(url : String)
-        initialize URI.parse(url)
-      end
-
-      def initialize(url : String, ssl : Bool)
+      # Initializes this connection with the given URL string and SSL flag.
+      #
+      # ```
+      # connection = Neo4j::Bolt::Connection.new("bolt://neo4j:password@localhost", ssl: false)
+      # ```
+      def initialize(url : String, ssl : Bool = true)
         initialize URI.parse(url), ssl
       end
 
+      # Initializes this connection with the given URI and SSL flag. SSL
+      # defaults to `true` so that, if you omit it by mistake, you aren't
+      # sending your database credentials in plaintext.
+      #
+      # ```
+      # uri = URI.parse("bolt://neo4j:password@localhost")
+      # connection = Neo4j::Bolt::Connection.new(uri, ssl: false)
+      # ```
       def initialize(@uri : URI, @ssl=true)
         host = uri.host.to_s
         port = uri.port || 7687
@@ -61,11 +70,81 @@ module Neo4j
         init username, password
       end
 
+      # Returns a streaming iterator that consumes results lazily from the
+      # Neo4j server. This can be used when the result set is very large so that
+      # your application does not need to retain the full result set in memory.
+      #
+      # ```
+      # results = connection.stream(query, user_id: user.id)
+      #
+      # results.each do |(user)|
+      #   process User.new(user.as(Neo4j:Node))
+      # end
+      # ```
+      #
+      # This example yields each result as it comes back from the database, but
+      # makes the query metadata available immediately.
+      #
+      # *NOTE:* You can only consume these results once. Anything that calls
+      #   `Enumerable#each(&block)` will fully consume all results. This means
+      #   calls like `Enumerable#first` and `Enumerable#size` are destructive.
+      #   This is a side effect of using the streaming iterator.
+      #
+      # *NOTE:* If you are using a connection pool, you *must* consume all of
+      #   the results before the connection goes back into the pool. Otherwise,
+      #   the connection will be in an inconsistent state and you will need to
+      #   manually `Neo4j::Bolt::Connection#reset` it.
+      #
+      # ```
+      # pool.connection do |connection|
+      #   results = connection.stream(query)
+      #   results.each do |(user)|
+      #     process User.new(user.as Neo4j::Node)
+      #   end
+      # ensure
+      #   results.each {} # Finish consuming the results
+      # end
+      # ```
       def stream(_query, **parameters)
         stream(_query, parameters.to_h.transform_keys(&.to_s))
       end
 
-      def stream(query, parameters = Hash(String, Type).new)
+      # Returns a streaming iterator that consumes results lazily from the
+      # Neo4j server. This can be used when the result set is very large so that
+      # your application does not need to retain the full result set in memory.
+      #
+      # ```
+      # results = connection.stream(query, Neo4j::Map { "user_id" => user.id })
+      #
+      # results.each do |(user)|
+      #   process User.new(user.as(Neo4j:Node))
+      # end
+      # ```
+      #
+      # This example yields each result as it comes back from the database, but
+      # makes the query metadata available immediately.
+      #
+      # *NOTE:* You can only consume these results once. Anything that calls
+      #   `Enumerable#each(&block)` will fully consume all results. This means
+      #   calls like `Enumerable#first` and `Enumerable#size` are destructive.
+      #   This is a side effect of using the streaming iterator.
+      #
+      # *NOTE:* If you are using a connection pool, you *must* consume all of
+      #   the results before the connection goes back into the pool. Otherwise,
+      #   the connection will be in an inconsistent state and you will need to
+      #   manually `Neo4j::Bolt::Connection#reset` it.
+      #
+      # ```
+      # pool.connection do |connection|
+      #   results = connection.stream(query)
+      #   results.each do |(user)|
+      #     process User.new(user.as Neo4j::Node)
+      #   end
+      # ensure
+      #   results.each {} # Finish consuming the results
+      # end
+      # ```
+      def stream(query, parameters = Map.new)
         StreamingResult.new(
           type: run(query, parameters),
           data: stream_results,
@@ -103,6 +182,22 @@ module Neo4j
         execute _query, params_hash, &block
       end
 
+      # Executes the given query with the given parameters and executes the
+      # block once for each result returned from the database.
+      #
+      # ```
+      # connection.execute <<-CYPHER, Neo4j::Map { "id" => 123 } do |(user)|
+      #   MATCH (user:User { id: $id })
+      #   RETURN user
+      # CYPHER
+      #   process User.new(user.as Neo4j::Node)
+      # end
+      # ```
+      #
+      # In the example above, we used `()` in the block arguments to destructure
+      # the list of `RETURN`ed values. Also note that we need to cast it down to
+      # a `Neo4j::Node`. All values in results have the compile-time type of
+      # `Neo4j::Value` and so will need to be cast down to its specific type.
       def execute(query, parameters : Map, &block : List ->)
         retry 5 do
           send Commands::Run, "BEGIN", Map.new
@@ -127,6 +222,12 @@ module Neo4j
         end
       end
 
+      # Execute the given query with the given parameters, returning a Result
+      # object containing query metadata and the query results in an array.
+      #
+      # ```
+      # connection.execute(query, Neo4j::Map { "id" => 123 })
+      # ```
       def execute(query, parameters : Map)
         if @transaction
           Result.new(type: run(query, parameters), data: pull_all)
@@ -135,6 +236,15 @@ module Neo4j
         end
       end
 
+      # Execute the given query with the given parameters, returning a Result
+      # object containing query metadata and the query results in an array.
+      #
+      # This method provides a convenient shorthand for providing a `Neo4j::Map`
+      # of query parameters.
+      #
+      # ```
+      # connection.execute(query, id: 123)
+      # ```
       def execute(_query query, **params)
         params_hash = Map.new
 
@@ -147,16 +257,65 @@ module Neo4j
         exec_cast query, Map.new, types
       end
 
+      # Execute the given query with the given parameters, returning an array
+      # containing the results cast into the given types.
+      #
+      # ```
+      # struct User
+      #   Neo4j.map_node(
+      #     id: UUID,
+      #     email: String,
+      #   )
+      # end
+      # connection.exec_cast(<<-CYPHER, { email: "me@example.com" }, {User})
+      #   MATCH (user:User { email: $email })
+      #   RETURN user
+      # CYPHER
+      # ```
       def exec_cast(query : String, parameters : NamedTuple, types : Tuple(*TYPES)) forall TYPES
         exec_cast query, parameters.to_h.transform_keys(&.to_s), types
       end
 
+      # Execute the given query with the given parameters, yielding a tuple
+      # containing the results cast into the given types.
+      #
+      # ```
+      # struct User
+      #   Neo4j.map_node(
+      #     id: UUID,
+      #     email: String,
+      #   )
+      # end
+      # connection.exec_cast(<<-CYPHER, { email: "me@example.com" }, {User}) do |(user)|
+      #   MATCH (user:User { email: $email })
+      #   RETURN user
+      # CYPHER
+      #   process user
+      # end
+      # ```
       def exec_cast(query : String, parameters : NamedTuple, types : Tuple(*TYPES), &block) forall TYPES
         exec_cast query, parameters.to_h.transform_keys(&.to_s), types do |row|
           yield row
         end
       end
 
+      # Execute the given query with the given parameters, yielding a tuple
+      # containing the results cast into the given types.
+      #
+      # ```
+      # struct User
+      #   Neo4j.map_node(
+      #     id: UUID,
+      #     email: String,
+      #   )
+      # end
+      # connection.exec_cast(<<-CYPHER, Neo4j::Map { "email" => "me@example.com" }, {User}) do |(user)|
+      #   MATCH (user:User { email: $email })
+      #   RETURN user
+      # CYPHER
+      #   process user
+      # end
+      # ```
       def exec_cast(query : String, parameters : Map, types : Tuple(*TYPES), &block) : Nil forall TYPES
         retry 5 do
           send Commands::Run, query, parameters
@@ -183,6 +342,22 @@ module Neo4j
         end
       end
 
+      # Execute the given query with the given parameters, returning an array
+      # containing the results cast into the given types.
+      #
+      # ```
+      # struct User
+      #   Neo4j.map_node(
+      #     id: UUID,
+      #     email: String,
+      #   )
+      # end
+      # connection.exec_cast(<<-CYPHER, Neo4j::Map { "email" => "me@example.com" }, {User})
+      #   MATCH (user:User { email: $email })
+      #   RETURN user
+      # CYPHER
+      # # => [{User(@id="4478440e-1897-41a9-812d-91f6d21b994b", @email="me@example.com")}]
+      # ```
       def exec_cast(query : String, parameters : Map, types : Tuple(*TYPES)) forall TYPES
         {% begin %}
           results = Array({{ TYPES.type_vars.map(&.stringify.gsub(/\.class$/, "").id).stringify.tr("[]", "{}").id }}).new
@@ -195,6 +370,23 @@ module Neo4j
         {% end %}
       end
 
+      # Execute the given query with the given parameters, returning an array
+      # containing the results cast into the given types.
+      #
+      # ```
+      # struct User
+      #   Neo4j.map_node(
+      #     id: UUID,
+      #     email: String,
+      #   )
+      # end
+      # connection.exec_cast_single(<<-CYPHER, Neo4j::Map { "email" => "me@example.com" }, {User})
+      #   MATCH (user:User { email: $email })
+      #   RETURN user
+      #   LIMIT 1
+      # CYPHER
+      # # => {User(@id="4478440e-1897-41a9-812d-91f6d21b994b", @email="me@example.com")}
+      # ```
       def exec_cast_single(query : String, parameters : Map, types : Tuple(*TYPES)) forall TYPES
         handled = false
         result = nil
@@ -208,10 +400,40 @@ module Neo4j
         result.not_nil!
       end
 
+      # Execute the given query with the given parameters, returning a single
+      # result cast to the given type.
+      #
+      # ```
+      # struct User
+      #   Neo4j.map_node(
+      #     id: UUID,
+      #     email: String,
+      #   )
+      # end
+      # connection.exec_cast_scalar(<<-CYPHER, Neo4j::Map { "email" => "me@example.com" }, User)
+      #   MATCH (user:User { email: $email })
+      #   RETURN user
+      #   LIMIT 1
+      # CYPHER
+      # # => User(@id="4478440e-1897-41a9-812d-91f6d21b994b", @email="me@example.com")
+      # ```
       def exec_cast_scalar(query : String, parameters : Map, type : T) forall T
         exec_cast_single(query, parameters, {type}).first
       end
 
+      # Wrap a group of queries into an atomic transaction. Yields a
+      # `Neo4j::Bolt::Transaction`.
+      #
+      # ```
+      # connection.transaction do |txn|
+      #   connection.execute query1
+      #   connection.execute query2
+      # end
+      # ```
+      #
+      # Exceptions raised within the block will roll back the transaction. To
+      # roll back the transaction manually and exit the block, call
+      # `txn.rollback`.
       def transaction
         if @transaction
           raise NestedTransactionError.new("Transaction already open, cannot open a new transaction")

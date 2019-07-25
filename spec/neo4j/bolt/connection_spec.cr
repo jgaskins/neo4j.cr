@@ -171,8 +171,9 @@ module Neo4j
 
             # Without the block param
             connection.transaction do
-              result = connection.execute "RETURN 42"
-              result.first.first.should eq 42
+              result = connection.execute "RETURN 42" do |(value)|
+                value.should eq 42
+              end
             end
           end
 
