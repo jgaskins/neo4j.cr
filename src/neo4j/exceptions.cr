@@ -10,9 +10,10 @@ module Neo4j
 
   class QueryException < Exception
     getter code : String
+    @query : String?
 
-    def initialize(message, @code)
-      super "#{message} [#{code}]"
+    def initialize(message, @code, @query = "")
+      super "#{message} [#{code}]#{" - Query: #{@query}" if @query}"
     end
   end
 
