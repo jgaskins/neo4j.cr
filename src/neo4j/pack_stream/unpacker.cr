@@ -105,7 +105,7 @@ module Neo4j
           Node.new(
             id: read_numeric.to_i64,
             labels: read_array.map(&.as(String)),
-            properties: read_hash.transform_keys(&.to_s),
+            properties: read_hash,
           )
         when StructureTypes::Relationship.value
           Relationship.new(
@@ -113,7 +113,7 @@ module Neo4j
             start: read_numeric.to_i64,
             end: read_numeric.to_i64,
             type: read_string,
-            properties: read_hash.transform_keys(&.to_s),
+            properties: read_hash,
           )
         when StructureTypes::Path.value
           Path.new(
@@ -125,7 +125,7 @@ module Neo4j
           UnboundRelationship.new(
             id: read_numeric.to_i64,
             type: read_string,
-            properties: read_hash.transform_keys(&.to_s),
+            properties: read_hash,
           )
         when StructureTypes::Success.value
           Success.new(read_hash)
@@ -140,7 +140,7 @@ module Neo4j
         when StructureTypes::DateTimeWithOffset.value
           time = Time.unix(read_int) + read_int.nanoseconds
           offset = read_int.to_i32
-          (time - offset.seconds).in(Time::Location.fixed(offset))
+          (time - offset.seconds).in(location_for(offset))
         when StructureTypes::LocalDateTime.value
           Time.unix(read_int) + read_int.nanoseconds
         when StructureTypes::Date.value
@@ -232,6 +232,16 @@ module Neo4j
         message = "unexpected token '#{token}'"
         message += " expected #{token_type}" if token_type
         raise UnpackException.new(message, @lexer.byte_number)
+      end
+
+      @@location_cache = Hash(Int32, Time::Location).new
+      @@cache_mutex = Mutex.new
+      private def location_for(offset : Int32)
+        @@location_cache.fetch offset do
+          @@cache_mutex.synchronize do
+            @@location_cache[offset] = Time::Location.fixed(offset)
+          end
+        end
       end
     end
   end
