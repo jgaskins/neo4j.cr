@@ -60,7 +60,7 @@ struct Tuple
   end
 end
 
-def Union.from_bolt(io)
+def Union.from_bolt(io) : self
   {% begin %}
     unpacker = ::Neo4j::PackStream::Unpacker.new(io)
     unpacker.prefetch_token
@@ -79,8 +79,7 @@ def Union.from_bolt(io)
           .sort
           .last
         %}
-        int = unpacker.read_int.to_i{{largest_int_size}}
-        return int
+        return unpacker.read_int.to_i{{largest_int_size}}
       end
     {% end %}
     {% if T.includes? Float64 %}

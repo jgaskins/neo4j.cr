@@ -23,7 +23,7 @@ struct MappingNodeExample
 
     def self.deserialize(value : String)
       year, month, day = value.split("-", 3).map(&.to_i)
-      Time.new(year, month, day)
+      Time.utc(year, month, day)
     end
   end
 end
@@ -47,7 +47,7 @@ module Neo4j
         labels: ["Foo", "Bar"],
         properties: Map {
           "name" => "Jamie",
-          "created_at" => Time.new(2015, 4, 20, 16, 20, 31).to_unix,
+          "created_at" => Time.utc(2015, 4, 20, 16, 20, 31).to_unix,
           "number" => 42_i8,
           "nilable_value" => nil,
           "nilable_question_mark" => nil,
@@ -59,7 +59,7 @@ module Neo4j
       # Node properties, the important stuff
 
       model.name.should eq "Jamie"
-      model.created_at.should eq Time.new(2015, 4, 20, 16, 20, 31)
+      model.created_at.should eq Time.utc(2015, 4, 20, 16, 20, 31)
       model.number.should eq 42
       model.nilable_value.should eq nil
       model.nilable_question_mark.should eq nil
@@ -67,7 +67,7 @@ module Neo4j
       model.int_with_default.should eq 0
       model.string_with_default.should eq "hi"
       model.string_with_other_key.should eq "value"
-      model.datestamp.should eq Time.new(2019, 1, 23)
+      model.datestamp.should eq Time.utc(2019, 1, 23)
 
       # Node metadata, the subtly important stuff
 
@@ -83,7 +83,7 @@ module Neo4j
         type: "FOO_BAR",
         properties: Map {
           "role" => "user",
-          "added_at" => Time.new(2015, 4, 20, 16, 20, 31).to_unix,
+          "added_at" => Time.utc(2015, 4, 20, 16, 20, 31).to_unix,
           "number" => 42,
           "nilable_value" => "not nil this time",
         },
@@ -92,7 +92,7 @@ module Neo4j
       # Properties
 
       model.role.should eq "user"
-      model.added_at.should eq Time.new(2015, 4, 20, 16, 20, 31)
+      model.added_at.should eq Time.utc(2015, 4, 20, 16, 20, 31)
       model.number.should eq 42
       model.nilable_value.should eq "not nil this time"
       model.int_with_default.should eq 0

@@ -178,7 +178,7 @@ module Neo4j
           seconds = read_int.to_i64
           nanoseconds = read_int.to_i32
           location = Time::Location.load(read_string)
-          Time.new(year: 1970, month: 1, day: 1, location: location) + seconds.seconds + nanoseconds.nanoseconds
+          Time.local(year: 1970, month: 1, day: 1, location: location) + seconds.seconds + nanoseconds.nanoseconds
         else
           Array(Value).new(token.size) do
             read_value.as Value

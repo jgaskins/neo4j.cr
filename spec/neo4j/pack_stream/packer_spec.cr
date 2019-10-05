@@ -71,7 +71,7 @@ module Neo4j
         Point2D.new(x: 1, y: 2),
         Point3D.new(x: 1, y: 2, z: 3),
         LatLng.new(latitude: 12.34, longitude: 56.78),
-        ::Time.new(
+        ::Time.local(
           year: 2019,
           month: 2,
           day: 16,

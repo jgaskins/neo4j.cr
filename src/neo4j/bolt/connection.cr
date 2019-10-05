@@ -698,7 +698,7 @@ module Neo4j
       end
 
       def next
-        if @complete && @channel.empty?
+        if @complete && @channel.@queue.not_nil!.empty?
           stop
         else
           @channel.receive

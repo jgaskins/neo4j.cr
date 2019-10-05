@@ -71,7 +71,7 @@ module Neo4j
         else
           if Int8::MIN <= value
             write_byte(0xC8)
-            write_byte(value.to_i8)
+            write_value(value.to_i8)
           elsif Int16::MIN <= value
             write_byte(0xC9)
             write_value(value.to_i16)

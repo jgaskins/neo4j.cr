@@ -105,7 +105,7 @@ module Neo4j
         it "handles nodes and relationships" do
           user_id = UUID.random.to_s
           group_id = UUID.random.to_s
-          now = Time.now.to_unix
+          now = Time.utc.to_unix
 
           result = connection.execute <<-CYPHER, user_id: user_id, group_id: group_id, now: now
             CREATE (user:User { id: $user_id, name: "Foo Bar" })
@@ -256,7 +256,7 @@ module Neo4j
               point({ latitude: 39, longitude: -76 }),
               point({ x: 1, y: 2, z: 3 })
           CYPHER
-            datetime_offset.should eq Time.new(
+            datetime_offset.should eq Time.local(
               year: 2019,
               month: 2,
               day: 16,
@@ -266,7 +266,7 @@ module Neo4j
               nanosecond: 999_000_000,
               location: Time::Location.load("America/New_York"),
             )
-            datetime_tz.should eq Time.new(
+            datetime_tz.should eq Time.local(
               year: 2019,
               month: 2,
               day: 16,

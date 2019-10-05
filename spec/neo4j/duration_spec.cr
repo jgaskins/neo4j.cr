@@ -4,7 +4,7 @@ require "../../src/neo4j/type"
 module Neo4j
   describe Duration do
     it "can be added to timestamps" do
-      timestamp = Time.new(
+      timestamp = Time.utc(
         year: 2019,
         month: 6,
         day: 30,
@@ -27,7 +27,7 @@ module Neo4j
         nanoseconds: 1,
       )
 
-      (timestamp + duration).should eq Time.new(
+      (timestamp + duration).should eq Time.utc(
         year: 2020,
         month: 8,
         day: 8,
@@ -37,7 +37,7 @@ module Neo4j
         nanosecond: 124_457_790,
       )
 
-      (timestamp - duration).should eq Time.new(
+      (timestamp - duration).should eq Time.utc(
         year: 2018,
         month: 5,
         day: 22,
