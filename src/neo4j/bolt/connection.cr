@@ -200,23 +200,15 @@ module Neo4j
       # `Neo4j::Value` and so will need to be cast down to its specific type.
       def execute(query, parameters : Map, &block : List ->)
         retry 5 do
-          send Commands::Run, "BEGIN", Map.new
-          send Commands::PullAll
           send Commands::Run, query, parameters
           send Commands::PullAll
-          send Commands::Run, "COMMIT", Map.new
-          send Commands::PullAll
 
-          read_result # BEGIN
-          read_result # PULL_ALL
           read_result # RUN
           result = read_result
           until result.is_a?(Neo4j::Response)
             yield result.as(List)
             result = read_result
           end
-          read_result # COMMIT
-          read_result # PULL_ALL
 
           result.as Response
         end
@@ -342,6 +334,12 @@ module Neo4j
         end
       end
 
+      def exec_cast(query : String, types : Tuple(*TYPES), &block) : Nil forall TYPES
+        exec_cast query, Neo4j::Map.new, types do |row|
+          yield row
+        end
+      end
+
       # Execute the given query with the given parameters, returning an array
       # containing the results cast into the given types.
       #
@@ -419,6 +417,10 @@ module Neo4j
       # ```
       def exec_cast_scalar(query : String, parameters : Map, type : T) forall T
         exec_cast_single(query, parameters, {type}).first
+      end
+
+      def exec_cast_scalar(query : String, type : T) forall T
+        exec_cast_single(query, Neo4j::Map.new, {type}).first
       end
 
       # Wrap a group of queries into an atomic transaction. Yields a

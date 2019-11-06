@@ -31,4 +31,7 @@ module Neo4j
 
   class PropertyMissing < Exception
   end
+
+  class Timeout < Exception
+  end
 end
