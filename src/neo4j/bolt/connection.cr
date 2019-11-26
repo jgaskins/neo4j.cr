@@ -62,7 +62,8 @@ module Neo4j
           context = OpenSSL::SSL::Context::Client.new
           context.add_options(OpenSSL::SSL::Options::NO_SSL_V2 | OpenSSL::SSL::Options::NO_SSL_V3)
 
-          @connection = OpenSSL::SSL::Socket::Client.new(@connection, context)
+          # Must set hostname for SNI (Server Name Indication) on some platforms, such as Neo4j Aura
+          @connection = OpenSSL::SSL::Socket::Client.new(@connection, context, hostname: uri.host)
         end
 
         handshake
