@@ -4,6 +4,10 @@ require "../pack_stream/token"
 require "../pack_stream/unpacker"
 require "../exceptions"
 
+def Nil.from_bolt(io)
+  Neo4j::PackStream::Unpacker.new(io).read_nil
+end
+
 {% for size in %w(8 16 32 64) %}
   def Int{{size.id}}.from_bolt(io)
     Neo4j::PackStream::Unpacker.new(io).read_int.to_i{{size.id}}
@@ -20,6 +24,10 @@ end
 
 def Bool.from_bolt(io)
   Neo4j::PackStream::Unpacker.new(io).read_bool
+end
+
+def Time.from_bolt(io) : Time
+  Neo4j::PackStream::Unpacker.new(io).read_structure.as(Time)
 end
 
 def Array.from_bolt(io)
@@ -41,6 +49,14 @@ module Neo4j
 
   def Point3D.from_bolt(io)
     PackStream::Unpacker.new(io).read_structure.as(Point3D)
+  end
+
+  def Node.from_bolt(io)
+    PackStream::Unpacker.new(io).read_structure.as(Node)
+  end
+
+  def Relationship.from_bolt(io)
+    PackStream::Unpacker.new(io).read_structure.as(Relationship)
   end
 end
 
@@ -66,7 +82,7 @@ def Union.from_bolt(io) : self
     unpacker.prefetch_token
     token = unpacker.token
 
-    {% non_primitive_types = T.reject { |type| [Nil, Bool, Int8, Int16, Int32, Int64, Float64, String].includes? type } %}
+    {% non_primitive_types = T.reject { |type| [Nil, Bool, Int8, Int16, Int32, Int64, Float64, String, Time].includes? type } %}
 
     {% if T.includes? Bool %}
       return unpacker.read_bool if token.type.bool?
@@ -88,20 +104,18 @@ def Union.from_bolt(io) : self
     {% if T.includes? String %}
       return unpacker.read_string if token.type.string?
     {% end %}
+    {% if T.includes? Time %}
+      return unpacker.read_value.as(Time) if token.type.structure?
+    {% end %}
+    {% if T.includes? Nil %}
+      return nil if token.type.null?
+    {% end %}
 
     {% if non_primitive_types.empty? %}
       raise ::Neo4j::UnknownType.new("Don't know how to cast #{unpacker.read_value.inspect} into #{{{T.join(" | ")}}}")
     {% else %}
-      structure = unpacker.read_value
       {% for type in non_primitive_types %}
-        case structure
-        {% if T.includes? Nil %}
-          when Nil
-            return nil
-        {% end %}
-        when ::Neo4j::Node
-          return {{type}}.new structure if structure.labels.includes? {{type.stringify}}
-        end
+        return {{type}}.new(unpacker.read_value.as(Neo4j::Node))
       {% end %}
       raise ::Neo4j::UnknownType.new("Don't know how to cast #{structure.inspect} into #{{{T}}.inspect}")
     {% end %}
