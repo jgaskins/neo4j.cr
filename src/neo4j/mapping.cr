@@ -59,7 +59,7 @@ module Neo4j
         {% __properties__[key] = { type: value } %}
       {% end %}
       {% __properties__[key][:key_id] = key.id.gsub(/\?$/, "") %}
-      {% if value.is_a?(Generic) && value.type_vars.any?(&.resolve.nilable?) %}
+      {% if __properties__[key][:type].is_a?(Generic) && __properties__[key][:type].type_vars.any?(&.resolve.nilable?) %}
         {% __properties__[key][:nilable] = true %}
         {% __properties__[key][:optional] = true %}
       {% end %}
@@ -135,7 +135,7 @@ module Neo4j
           {% array_type = value[:type].type_vars %}
           @{{key.id}} = %property_value.as(Array).map { |value| value.as({{array_type.join(" | ").id}}) }
         {% elsif value[:converter] %}
-          @{{value[:key_id]}} = {{value[:converter]}}.deserialize(%property_value)
+          @{{value[:key_id]}} = {{value[:converter]}}.deserialize(%property_value) {% if value[:nilable] %} unless %property_value.nil? {% end %}
         {% else %}
           @{{key.id}} = %property_value.as({{value[:type]}}{{(value[:nilable] && !value[:optional] ? "?" : "").id}})
         {% end %}

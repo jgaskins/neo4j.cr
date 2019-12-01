@@ -14,6 +14,7 @@ struct MappingNodeExample
     string_with_default: { type: String, default: "hi" },
     string_with_other_key: { type: String, key: "stringWithOtherKey" },
     datestamp: { type: Time, converter: DateStampConversion, key: "date" },
+    optional_datestamp: { type: Time?, converter: DateStampConversion, key: "optional_date" },
   )
 
   module DateStampConversion
@@ -68,6 +69,7 @@ module Neo4j
       model.string_with_default.should eq "hi"
       model.string_with_other_key.should eq "value"
       model.datestamp.should eq Time.utc(2019, 1, 23)
+      model.optional_datestamp.should eq nil
 
       # Node metadata, the subtly important stuff
 

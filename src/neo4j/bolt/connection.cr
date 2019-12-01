@@ -266,7 +266,9 @@ module Neo4j
       # CYPHER
       # ```
       def exec_cast(query : String, parameters : NamedTuple, types : Tuple(*TYPES)) forall TYPES
-        exec_cast query, parameters.to_h.transform_keys(&.to_s), types
+        params = Neo4j::Map.new
+        parameters.each { |key, value| params[key.to_s] = value }
+        exec_cast query, params, types
       end
 
       # Execute the given query with the given parameters, yielding a tuple
@@ -287,7 +289,9 @@ module Neo4j
       # end
       # ```
       def exec_cast(query : String, parameters : NamedTuple, types : Tuple(*TYPES), &block) forall TYPES
-        exec_cast query, parameters.to_h.transform_keys(&.to_s), types do |row|
+        params = Neo4j::Map.new
+        parameters.each { |key, value| params[key.to_s] = value }
+        exec_cast query, params, types do |row|
           yield row
         end
       end
@@ -522,7 +526,7 @@ module Neo4j
         @connection.flush
       end
 
-      private def run(statement, parameters = {} of String => Type, retries = 5)
+      private def run(statement, parameters = Map.new, retries = 5)
         send Commands::Run, statement, parameters
 
         result = read_result
@@ -587,7 +591,7 @@ module Neo4j
       private def handle_result(result : Failure)
         exception_class = EXCEPTIONS[result.attrs["code"]]? || QueryException
         raise exception_class.new(
-          result.attrs["message"].as(String),
+          result.attrs["message"].as(String | Nil).to_s,
           result.attrs["code"].as(String),
         )
       end
