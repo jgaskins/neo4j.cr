@@ -2,6 +2,7 @@ require "uri"
 
 require "./bolt/connection"
 require "./connection_pool"
+require "./session"
 
 module Neo4j
   class Cluster
@@ -65,35 +66,82 @@ module Neo4j
       end
     end
 
-    def write_transaction
-      connection = @write_servers.checkout
-      connection.transaction do
-        yield connection
-      end
+    def session(& : Session -> T) forall T
+      session = Session.new(self)
+      yield session
     ensure
-      @write_servers.release connection if connection
+      session.close if session
     end
 
-    def read_transaction
-      connection = @read_servers.checkout
-      connection.transaction do
-        yield connection
+    class Session < ::Neo4j::Session
+      enum ConnectionType
+        Pending
+        Read
+        Write
+        Closed
       end
-    ensure
-      @read_servers.release connection if connection
+
+      delegate execute, stream, exec_cast, exec_cast_scalar, to: connection
+
+      @connection : Bolt::Connection?
+      @connection_type = ConnectionType::Pending
+
+      def initialize(@cluster : Cluster)
+      end
+
+      def write_transaction
+        raise SessionClosed.new("Cannot open a write transaction on a closed session") if closed?
+
+        @connection_type = ConnectionType::Write
+
+        connection.transaction { |txn| yield txn }
+      end
+
+      def read_transaction
+        raise SessionClosed.new("Cannot open a write transaction on a closed session") if closed?
+
+        @connection_type = ConnectionType::Read if @connection_type.pending?
+
+        connection.transaction { |txn| yield txn }
+      end
+
+      def connection
+        case @connection_type
+        when .pending?
+          @connection_type = ConnectionType::Write
+          @connection = @cluster.@write_servers.checkout
+        when .read?
+          @connection ||= @cluster.@read_servers.checkout
+        when .write?
+          @connection ||= @cluster.@write_servers.checkout
+        when .closed?
+          raise SessionClosed.new("Cannot reopen a closed session")
+        else
+          raise "Invalid connection type: #{@connection_type.inspect}"
+        end
+      end
+
+      def close : Nil
+        if connection = @connection
+          case @connection_type
+          when .read?
+            @cluster.@read_servers.release connection
+          when .write?
+            @cluster.@write_servers.release connection
+          end
+        end
+      end
+
+      def closed?
+        @connection_type.closed?
+      end
     end
 
     class Error < ::Exception
     end
     class NotAClusterURI < Error
     end
-  end
-
-  class Session
-    def initialize(@connection : Bolt::Connection)
-    end
-
-    def run
+    class SessionClosed < Error
     end
   end
 end
