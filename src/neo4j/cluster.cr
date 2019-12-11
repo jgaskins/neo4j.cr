@@ -25,7 +25,7 @@ module Neo4j
       @check_again_at = ttl.as(Int).seconds.from_now
 
       @read_servers = ConnectionPool.new(
-        initial_pool_size: 1,
+        initial_pool_size: 0,
         max_pool_size: 0, # 0 == unlimited
         max_idle_pool_size: 10,
         checkout_timeout: 5.seconds,
