@@ -10,7 +10,7 @@ module Neo4j
     @write_servers : ConnectionPool
     @read_servers : ConnectionPool
 
-    def initialize(entrypoint : URI, ssl = true)
+    def initialize(entrypoint : URI, ssl = true, max_pool_size = 200)
       unless entrypoint.scheme == "bolt+routing"
         raise NotAClusterURI.new("The cluster entrypoint should be a 'bolt+routing' URI. Got: #{entrypoint}")
       end
@@ -27,7 +27,7 @@ module Neo4j
 
       @read_servers = ConnectionPool.new(
         initial_pool_size: 0,
-        max_pool_size: 0, # 0 == unlimited
+        max_pool_size: max_pool_size, # 0 == unlimited
         max_idle_pool_size: 10,
         checkout_timeout: 5.seconds,
         retry_attempts: 3,
@@ -47,7 +47,7 @@ module Neo4j
 
       @write_servers = ConnectionPool.new(
         initial_pool_size: 1,
-        max_pool_size: 0, # 0 == unlimited
+        max_pool_size: max_pool_size, # 0 == unlimited
         max_idle_pool_size: 10,
         checkout_timeout: 5.seconds,
         retry_attempts: 3,
