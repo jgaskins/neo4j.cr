@@ -18,7 +18,6 @@ module Neo4j
       entrypoint = entrypoint.dup
       entrypoint.scheme = "bolt"
 
-      start = Time.utc
       connection = Bolt::Connection.new(entrypoint, ssl: ssl)
 
       ttl, servers = connection.execute("call dbms.cluster.routing.getServers()").data.first
