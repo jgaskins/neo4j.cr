@@ -68,71 +68,28 @@ module Neo4j
     def session(& : Session -> T) forall T
       session = Session.new(self)
       yield session
-    ensure
-      session.close if session
     end
 
     class Session < ::Neo4j::Session
-      enum ConnectionType
-        Pending
-        Read
-        Write
-        Closed
-      end
-
-      delegate execute, stream, exec_cast, exec_cast_scalar, to: connection
-
-      @connection : Bolt::Connection?
-      @connection_type = ConnectionType::Pending
-
       def initialize(@cluster : Cluster)
       end
 
       def write_transaction
-        raise SessionClosed.new("Cannot open a write transaction on a closed session") if closed?
-
-        @connection_type = ConnectionType::Write
-
-        connection.transaction { |txn| yield txn }
+        @cluster.@write_servers.checkout(&.transaction { |txn| yield txn })
       end
 
       def read_transaction
-        raise SessionClosed.new("Cannot open a write transaction on a closed session") if closed?
-
-        @connection_type = ConnectionType::Read if @connection_type.pending?
-
-        connection.transaction { |txn| yield txn }
+        @cluster.@read_servers.checkout(&.transaction { |txn| yield txn })
       end
 
-      def connection
-        case @connection_type
-        when .pending?
-          @connection_type = ConnectionType::Write
-          @connection = @cluster.@write_servers.checkout
-        when .read?
-          @connection ||= @cluster.@read_servers.checkout
-        when .write?
-          @connection ||= @cluster.@write_servers.checkout
-        when .closed?
-          raise SessionClosed.new("Cannot reopen a closed session")
-        else
-          raise "Invalid connection type: #{@connection_type.inspect}"
+      def exec_cast(query : String, as types : Tuple(*T), **params) : Tuple(*T) forall T
+        @cluster.@write_servers.checkout do |connection|
+          connection.exec_cast query, params, types
         end
       end
 
-      def close : Nil
-        if connection = @connection
-          case @connection_type
-          when .read?
-            @cluster.@read_servers.release connection
-          when .write?
-            @cluster.@write_servers.release connection
-          end
-        end
-      end
-
-      def closed?
-        @connection_type.closed?
+      def execute(query : String, **params)
+        @cluster.@write_servers.checkout(&.execute(query, **params))
       end
     end
 

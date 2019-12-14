@@ -68,6 +68,13 @@ module Neo4j
       )
     end
 
+    def checkout(& : Bolt::Connection -> T) : T forall T
+      connection = checkout
+      yield connection
+    ensure
+      release connection.not_nil!
+    end
+
     def checkout : Bolt::Connection
       res = sync do
         resource = nil
