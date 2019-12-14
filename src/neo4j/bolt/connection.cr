@@ -450,8 +450,9 @@ module Neo4j
 
         execute "BEGIN"
         yield(@transaction.not_nil!).tap { execute "COMMIT" }
-      rescue RollbackException
+      rescue e : RollbackException
         execute "ROLLBACK"
+        raise e
       rescue e : NestedTransactionError
         # We don't want our NestedTransactionError to be picked up by the
         # catch-all rescue below, so we're explicitly capturing and re-raising
