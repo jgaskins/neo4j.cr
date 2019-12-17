@@ -325,16 +325,27 @@ module Neo4j
 
           result = read_raw_result
 
+          error = nil
           until result[1] != 0x71
-            # First 3 bytes are Structure, Record, and List
-            # TODO: If the RETURN clause in the query has more than 16 items,
-            # this will break because the List byte marker and its size won't be
-            # in a single byte. We'll need to detect this here.
-            io = IO::Memory.new(result + 3)
+            unless error
+              # First 3 bytes are Structure, Record, and List
+              # TODO: If the RETURN clause in the query has more than 16 items,
+              # this will break because the List byte marker and its size won't be
+              # in a single byte. We'll need to detect this here.
 
-            yield types.from_bolt(io)
+              io = IO::Memory.new(result + 3)
+              begin
+                yield types.from_bolt(io)
+              rescue e
+                error = e unless error
+              end
+            end
 
             result = read_raw_result
+          end
+
+          if error
+            raise error
           end
         end
       end
@@ -459,12 +470,7 @@ module Neo4j
         # here to bypass it
         reset
         raise e
-      rescue e : QueryException
-        ack_failure
-        execute "ROLLBACK"
-        reset
-        raise e
-      rescue e # Don't ack_failure if it wasn't a QueryException
+      rescue e
         execute "ROLLBACK"
         reset
         raise e
