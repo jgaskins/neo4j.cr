@@ -82,7 +82,7 @@ module Neo4j
         @cluster.@read_servers.checkout(&.transaction { |txn| yield txn })
       end
 
-      def exec_cast(query : String, as types : Tuple(*T), **params) : Tuple(*T) forall T
+      def exec_cast(query : String, as types : Tuple(*T), **params) forall T
         @cluster.@write_servers.checkout do |connection|
           connection.exec_cast query, params, types
         end
