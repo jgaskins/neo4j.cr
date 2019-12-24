@@ -9,45 +9,53 @@ module Neo4j
     @check_again_in : Time::Span
     @read_servers : ConnectionPool
     @write_servers : ConnectionPool
-    @last_known_server_list = Array(Map).new
+    @read_server_addresses = Array(String).new
+    @write_server_addresses = Array(String).new
 
     def initialize(@entrypoint : URI, @ssl = true, @max_pool_size = 200)
       unless entrypoint.scheme == "bolt+routing"
         raise NotAClusterURI.new("The cluster entrypoint should be a 'bolt+routing' URI. Got: #{entrypoint}")
       end
 
-      @check_again_in, @read_servers, @write_servers = refresh_servers
+      @check_again_in, @read_server_addresses, @write_server_addresses, @read_servers, @write_servers = refresh_servers
 
       spawn do
         loop do
           sleep @check_again_in
 
-          @check_again_in, @read_servers, @write_servers = refresh_servers
+          @check_again_in, @read_server_addresses, @write_server_addresses, @read_servers, @write_servers = refresh_servers(@read_servers, @write_servers)
         end
       end
     end
 
     def session(& : Session -> T) forall T
-      if Time.utc > @check_again_at
-      end
-
       session = Session.new(self)
       yield session
     end
 
-    private def refresh_servers : {Time::Span, ConnectionPool, ConnectionPool}
+    private def refresh_servers(read_servers : ConnectionPool? = nil, write_servers : ConnectionPool? = nil) : {Time::Span, Array(String), Array(String), ConnectionPool, ConnectionPool}
       entrypoint = @entrypoint.dup
       entrypoint.scheme = "bolt"
 
       connection = Bolt::Connection.new(entrypoint, ssl: @ssl)
 
       ttl, raw_servers = connection.execute("call dbms.cluster.routing.getServers()").data.first
-      servers = raw_servers.as(Array).map(&.as(Map))
+      servers = raw_servers
+        .as(Array)
+        .map(&.as(Map))
+      read_server_addresses = servers
+        .select { |value| value["role"] == "READ" }
+        .flat_map { |value| value["addresses"].as(Array).map(&.as(String)) }
+        .sort
+      write_server_addresses = servers
+        .select { |value| value["role"] == "WRITE" }
+        .flat_map { |value| value["addresses"].as(Array).map(&.as(String)) }
+        .sort
 
-      check_again_at = ttl.as(Int).milliseconds
+      check_again_in = ttl.as(Int).seconds
 
-      if servers == @last_known_server_list && (read_servers = @read_servers) && (write_servers = @write_servers)
-        return {check_again_at, read_servers, write_servers}
+      if read_server_addresses == @read_server_addresses && write_server_addresses == @write_server_addresses && read_servers && write_servers
+        return {check_again_in, read_server_addresses, write_server_addresses, read_servers, write_servers}
       end
 
       read_servers = ConnectionPool.new(
@@ -58,12 +66,9 @@ module Neo4j
         retry_attempts: 3,
         retry_delay: 200.milliseconds,
       ) do
-        server = @entrypoint.dup
-        host, port = servers
-          .select { |value| value["role"] == "READ" }
-          .flat_map { |value| value["addresses"].as(Array).map(&.as(String)) }
-          .sample
-          .split(':', 2)
+        host, port = read_server_addresses.sample.split(':', 2)
+
+        server = entrypoint.dup
         server.host = host
         server.port = port.to_i?
 
@@ -78,10 +83,8 @@ module Neo4j
         retry_attempts: 3,
         retry_delay: 200.milliseconds,
       ) do
-        server = @entrypoint.dup
-        host, port = servers
-          .select { |value| value["role"] == "WRITE" }
-          .flat_map { |value| value["addresses"].as(Array).map(&.as(String)) }
+        server = entrypoint.dup
+        host, port = write_server_addresses
           .sample
           .split(':', 2)
         server.host = host
@@ -90,7 +93,7 @@ module Neo4j
         Bolt::Connection.new(uri: server, ssl: @ssl)
       end
 
-      {check_again_at, read_servers, write_servers}
+      {check_again_in, read_server_addresses, write_server_addresses, read_servers, write_servers}
     end
 
     class Session < ::Neo4j::Session
