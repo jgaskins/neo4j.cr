@@ -13,8 +13,8 @@ module Neo4j
     @write_server_addresses = Array(String).new
 
     def initialize(@entrypoint : URI, @ssl = true, @max_pool_size = 200)
-      unless entrypoint.scheme == "bolt+routing"
-        raise NotAClusterURI.new("The cluster entrypoint should be a 'bolt+routing' URI. Got: #{entrypoint}")
+      unless entrypoint.scheme == "bolt+routing" || entrypoint.scheme == "neo4j"
+        raise NotAClusterURI.new("The cluster entrypoint should be a 'bolt+routing' or 'neo4j' URI. Got: #{entrypoint}")
       end
 
       @check_again_in, @read_server_addresses, @write_server_addresses, @read_servers, @write_servers = refresh_servers
