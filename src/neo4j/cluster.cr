@@ -24,6 +24,7 @@ module Neo4j
           sleep @check_again_in
 
           @check_again_in, @read_server_addresses, @write_server_addresses, @read_servers, @write_servers = refresh_servers(@read_servers, @write_servers)
+        rescue ex : Errno | IO::EOFError
         end
       end
     end
@@ -33,7 +34,11 @@ module Neo4j
       yield session
     end
 
-    private def refresh_servers(read_servers : ConnectionPool? = nil, write_servers : ConnectionPool? = nil) : {Time::Span, Array(String), Array(String), ConnectionPool, ConnectionPool}
+    private def refresh_servers(
+      read_servers : ConnectionPool? = nil,
+      write_servers : ConnectionPool? = nil,
+      retries = 5,
+    ) : {Time::Span, Array(String), Array(String), ConnectionPool, ConnectionPool}
       entrypoint = @entrypoint.dup
       entrypoint.scheme = "bolt"
 
@@ -76,7 +81,7 @@ module Neo4j
       end
 
       write_servers = ConnectionPool.new(
-        initial_pool_size: 1,
+        initial_pool_size: 0,
         max_pool_size: @max_pool_size, # 0 == unlimited
         max_idle_pool_size: 10,
         checkout_timeout: 5.seconds,
@@ -94,6 +99,12 @@ module Neo4j
       end
 
       {check_again_in, read_server_addresses, write_server_addresses, read_servers, write_servers}
+    rescue ex : IO::Error | Errno
+      if retries > 0
+        refresh_servers read_servers, write_servers, retries - 1
+      else
+        raise ex
+      end
     end
 
     class Session < ::Neo4j::Session

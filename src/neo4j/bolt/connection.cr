@@ -46,7 +46,7 @@ module Neo4j
       # uri = URI.parse("bolt://neo4j:password@localhost")
       # connection = Neo4j::Bolt::Connection.new(uri, ssl: false)
       # ```
-      def initialize(@uri : URI, @ssl=true)
+      def initialize(@uri : URI, @ssl=true, connection_retries = 5)
         host = uri.host.to_s
         port = uri.port || 7687
         username = uri.user.to_s
@@ -56,7 +56,14 @@ module Neo4j
           raise ArgumentError.new("Connection must use Bolt")
         end
 
-        @connection = TCPSocket.new(host, port)
+        @connection = loop do
+                        break TCPSocket.new(host, port)
+                      rescue ex
+                        connection_retries -= 1
+                        if connection_retries < 0
+                          raise ex
+                        end
+                      end
 
         if ssl
           context = OpenSSL::SSL::Context::Client.new
