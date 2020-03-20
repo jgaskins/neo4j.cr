@@ -611,7 +611,7 @@ module Neo4j
         "Neo.ClientError.Schema.ConstraintValidationFailed" => ConstraintValidationFailed,
       }
       private def handle_result(result : Failure)
-        exception_class = EXCEPTIONS[result.attrs["code"]]? || QueryException
+        exception_class = EXCEPTIONS[result.attrs["code"].as(String)]? || QueryException
         raise exception_class.new(
           result.attrs["message"].as(String | Nil).to_s,
           result.attrs["code"].as(String),
