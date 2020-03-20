@@ -723,18 +723,23 @@ module Neo4j
 
       def initialize
         @channel = Channel(List).new(1)
+        @stop_channel = Channel(Nil).new(1)
         @complete = false
       end
 
       def next
-        if @complete && @channel.@queue.not_nil!.empty?
+        return stop if @complete
+
+        select
+        when value = @channel.receive
+          value
+        when @stop_channel.receive
           stop
-        else
-          @channel.receive
         end
       end
 
       def complete!
+        @stop_channel.send nil
         @complete = true
       end
     end
