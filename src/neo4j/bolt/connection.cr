@@ -274,7 +274,15 @@ module Neo4j
       # ```
       def exec_cast(query : String, parameters : NamedTuple, types : Tuple(*TYPES)) forall TYPES
         params = Neo4j::Map.new
-        parameters.each { |key, value| params[key.to_s] = value }
+        parameters.each do |key, value|
+          params[key.to_s] =
+            case value
+            when Array
+              value.map(&.as(Neo4j::Value))
+            else
+              value
+            end
+        end
         exec_cast query, params, types
       end
 
