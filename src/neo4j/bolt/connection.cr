@@ -560,7 +560,7 @@ module Neo4j
         else
           raise ::Neo4j::UnknownResult.new("Cannot identify this result: #{result.inspect}")
         end
-      rescue ex : IO::EOFError | OpenSSL::SSL::Error | Errno
+      rescue ex : IO::Error | OpenSSL::SSL::Error
         if retries > 0
           initialize @uri, @ssl
           run statement, parameters, retries - 1
@@ -686,7 +686,7 @@ module Neo4j
       private def retry(times)
         loop do
           return yield
-        rescue ex : IO::EOFError | OpenSSL::SSL::Error | Errno
+        rescue ex : IO::Error | OpenSSL::SSL::Error
           if times > 0
             initialize @uri, @ssl
             times -= 1
