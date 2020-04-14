@@ -24,7 +24,7 @@ module Neo4j
           sleep @check_again_in
 
           @check_again_in, @read_server_addresses, @write_server_addresses, @read_servers, @write_servers = refresh_servers(@read_servers, @write_servers)
-        rescue ex : Errno | IO::EOFError
+        rescue ex : IO::Error
         end
       end
     end
@@ -99,7 +99,7 @@ module Neo4j
       end
 
       {check_again_in, read_server_addresses, write_server_addresses, read_servers, write_servers}
-    rescue ex : IO::Error | Errno
+    rescue ex : IO::Error
       if retries > 0
         refresh_servers read_servers, write_servers, retries - 1
       else
