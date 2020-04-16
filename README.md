@@ -24,183 +24,44 @@ First you need to set up a connection:
 ```crystal
 require "neo4j"
 
+neo4j_uri = URI.parse("bolt://neo4j:password@localhost:7687")
+
 # The `ssl` option defaults to `true` so you don't accidentally send the
 # password to your production DB in cleartext.
-connection = Neo4j::Bolt::Connection.new(
-  "bolt://neo4j:password@localhost:7687",
-  ssl: false,
-)
+driver = Neo4j.connect(neo4j_uri, ssl: false)
 ```
 
-The `connection` has the following public methods:
-
-- `execute(query : String, params = Neo4j::Map.new) : Neo4j::Result`
-- `stream(query : String, params = Neo4j::Map.new) : Neo4j::StreamingResult`
-- `exec_cast(query : String, params : Neo4j::Map, types : Tuple(*TYPES) : Neo4j::Result`
-- `transaction(&block)`
-- `reset`
-
-### `execute(query : String, params = ({} of String => Neo4j::Type))`
-
-Executes the given Cypher query. Takes a hash of params for sanitization and query caching.
+This will return a cluster driver or a direct driver depending on whether you provided a `neo4j://` or `bolt://` URI, respectively. `neo4j://` can also be specified as `bolt+routing://`. Both drivers expose the same interface, but the cluster driver will route queries to a different server based on whether you specify that the query is a read or write query.
 
 ```crystal
-result = connection.execute("
-  MATCH (order:Order)-[:ORDERS]->(product:Product)
-  RETURN order, collect(product)
-  LIMIT 10
-")
-```
-
-This method returns a `Neo4j::Result`. You can iterate over it with `Enumerable` methods. Each iteration of the block will return an array of the values passed to the query's `RETURN` clause:
-
-```crystal
-result = connection.execute(<<-CYPHER, { "email" => "foo@example.com" })
-  MATCH (self:User)<-[:SENT_TO]-(message:Message)-[:SENT_BY]->(author:User)
-  WHERE self.email == $email
-  RETURN author, message
-CYPHER
-
-result.map do |(author, message)| # Using () to destructure the array into block args
-  do_something(
-    author: author.as(Neo4j::Node),
-    message: message.as(Neo4j::Node),
-  )
-end
-```
-
-Note that we cast the values returned from the query into `Neo4j::Node`. Each value returned from a query can be any Neo4j data type and cannot be known at compile time, so we have to cast the values into the types we know them to be — in this case, we are returning nodes.
-
-### `exec_cast(query : String, params : Neo4j::Map, types : Tuple(*T)) forall T`
-
-Executes the given Cypher query, passing the given params and deserializing directly into the given types, known at compile time.
-
-```crystal
-result = connection.exec_cast <<-CYPHER, { "id" => user_id }, {Int32}
-  MATCH (post:Post)-[:WRITTEN_BY]->(:Author { id: $id })
-  RETURN count(post)
-CYPHER
-
-result.first # {12}
-```
-
-You can also pass your own node- or relationship-mapped types:
-
-```crystal
-struct User
-  Neo4j.map_node(id: UUID, name: String)
-end
-
-struct Following
-  Neo4j.map_relationship(since: Time)
-end
-
-results = connection.exec_cast <<-CYPHER, { "id" => user_id }, {User, Following}
-  MATCH (follower:User)-[following:FOLLOWS]->(:User { id: $id })
-  RETURN follower, following
-CYPHER
-
-results.each do |(follower, following)|
-  # No need to type-cast, their compile-time types are already User and Following
-  pp follower_id: follower.id, since: following.since
-end
-```
-
-If you'd like to stream results instead of working with the collection of all objects in memory at once, you can pass a block (the same block that you would pass to `result.each`):
-
-```crystal
-connection.exec_cast query, {id: user_id}, {User, Following} do |(follower, following)|
-  pp follower_id: follower.id, since: following.since
-end
-```
-
-This version of the method keeps memory consumption low and reduces the time to process your first result.
-
-### `transaction(&block)`
-
-Executes the block within the context of a Neo4j transaction. At the end of the block, the transaction is committed. If an exception is raised, the transaction will be rolled back and the connection will be reset to a clean state.
-
-Example:
-
-```crystal
-connection.transaction do |txn|
-  query = <<-CYPHER
-    CREATE (user:User {
-      uuid: $uuid,
-      name: $name,
-      email: $email,
-    })
-  CYPHER
-
-  connection.execute(query, params.merge({ "uuid" => UUID.random.to_s }))
-end
-```
-
-### `stream(query : String, parameters : Hash(String, Neo4j::Type))` _EXPERIMENTAL_
-
-Behaves similar to `execute(query, parameters)`, but the results are streamed rather than evaluated eagerly. For large result sets, this can drastically reduce memory usage and eliminates the need to provide workarounds like [ActiveRecord's `find_each`](https://api.rubyonrails.org/classes/ActiveRecord/Batches.html#method-i-find_each) method.
-
-Example:
-
-```crystal
-struct User
+struct Person
   Neo4j.map_node(
     id: UUID,
-    email: String,
     name: String,
-    created_at: Time,
+    email: String,
   )
 end
 
-connection
-  .stream("MATCH (user:User) RETURN user")
-  .each
-  .map { |(user_node)| User.new(user_node.as(Neo4j::Node)) }
-```
-
-In this example, the driver will not retrieve a result from the connection until it is needed. In many cases, this reduces memory consumption as the values returned from the database are not all stored in memory at once. Consider the eager version:
-
-```crystal
-connection
-  .execute("MATCH (user:User) RETURN user")
-  .map { |(user_node)| User.new(user_node.as(Neo4j::Node)) }
-```
-
-This code would need to keep all of the user nodes in your entire graph in memory at once while it builds the array of `User` objects created from those nodes.
-
-Streaming results not only reduces memory usage, but also improves time to first result. Loading everything all at once means you can't process the first result until you have the last result. Streaming lets you process the first result before you've received the second.
-
-**IMPORTANT:** The result stays inside the communication buffer until the application consumes it. If you are using a connection pool, it is important not to release the connection back to the pool until you've consumed the entire result set:
-
-```crystal
-CONNECTION_POOL = ConnectionPool(Neo4j::Bolt::Connection).new do
-  Neo4j::Bolt::Connection.new(NEO4J_URL)
-end
-
-def fetch_posts(for topic : Topic) : Array(Post)
-  CONNECTION_POOL.connection do |conn|
-    results = conn.stream <<-CYPHER, topic_id: topic.id
-      MATCH (topic : Topic { id: $topic_id })
-      MATCH (post : Post)
-      MATCH (post)-[:POSTED_TO]->(topic)
-
-      RETURN post
+driver.session do |session|
+  session.read_transaction do |read|
+    query = <<-CYPHER
+      MATCH (person:Person { name: $name })
+      RETURN person
     CYPHER
 
-    # This lazily consumes all of the results, so when we exit this block, we
-    # will not have consumed them. We need to eliminate the `each` here.
-    results.each.map do |(post)|
-      Post.new(post.as Neo4j::Node)
+    read.exec_cast(query, {Person}, name: "Jamie") do |(person)|
+      pp person
     end
   end
+
+  session.write_transaction do |write|
+    write.execute <<-CYPHER, name: "Jamie"
+      MATCH (person:Person { name: $name })
+      SET person.login_count = person.login_count + 1
+    CYPHER
+  end
 end
-
-posts = fetch_posts for: topic
 ```
-
-### `reset`
-
-Resets a connection to a clean state. A connection will automatically call `reset` if an exception is raised within a transaction, so you shouldn't have to call this explicitly, but it's provided just in case.
 
 ### `Neo4j::Result`
 
@@ -288,25 +149,9 @@ class CartItem
 end
 ```
 
-With these in place, you can build them from your nodes and relationships:
-
-```crystal
-result = connection.exec_cast(<<-CYPHER, { "uuid" => params["uuid"] }, {Product, CartItem})
-  MATCH (product:Product)-[cart_item:IN_CART]->(user:User { uuid: $uuid })
-  RETURN product, cart_item
-CYPHER
-
-cart = Cart.new(result.to_a)
-```
-
-## Future development
-
-- `bolt+routing`
-  - I'm checking out the Java driver to see how they handle routing between core servers in Enterprise clusters
-
 ## Acknowledgements/Credits
 
-This implementation is _heavily_ based on [@benoist](https://github.com/benoist)'s [implementation of MessagePack](https://github.com/crystal-community/msgpack-crystal) to understand how to serialize and deserialize a binary protocol in Crystal.
+The implementation of the wire protocol is _heavily_ based on the [MessagePack shard](https://github.com/crystal-community/msgpack-crystal) to understand how to serialize and deserialize a binary protocol in Crystal.
 
 ## Contributing
 
