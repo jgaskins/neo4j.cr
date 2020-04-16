@@ -46,7 +46,7 @@ module Neo4j
       # uri = URI.parse("bolt://neo4j:password@localhost")
       # connection = Neo4j::Bolt::Connection.new(uri, ssl: false)
       # ```
-      def initialize(@uri : URI, @ssl=true)
+      def initialize(@uri : URI, @ssl=true, connection_retries = 5)
         host = uri.host.to_s
         port = uri.port || 7687
         username = uri.user.to_s
@@ -56,13 +56,21 @@ module Neo4j
           raise ArgumentError.new("Connection must use Bolt")
         end
 
-        @connection = TCPSocket.new(host, port)
+        @connection = loop do
+                        break TCPSocket.new(host, port)
+                      rescue ex
+                        connection_retries -= 1
+                        if connection_retries < 0
+                          raise ex
+                        end
+                      end
 
         if ssl
           context = OpenSSL::SSL::Context::Client.new
           context.add_options(OpenSSL::SSL::Options::NO_SSL_V2 | OpenSSL::SSL::Options::NO_SSL_V3)
 
-          @connection = OpenSSL::SSL::Socket::Client.new(@connection, context)
+          # Must set hostname for SNI (Server Name Indication) on some platforms, such as Neo4j Aura
+          @connection = OpenSSL::SSL::Socket::Client.new(@connection, context, hostname: uri.host)
         end
 
         handshake
@@ -200,23 +208,15 @@ module Neo4j
       # `Neo4j::Value` and so will need to be cast down to its specific type.
       def execute(query, parameters : Map, &block : List ->)
         retry 5 do
-          send Commands::Run, "BEGIN", Map.new
-          send Commands::PullAll
           send Commands::Run, query, parameters
           send Commands::PullAll
-          send Commands::Run, "COMMIT", Map.new
-          send Commands::PullAll
 
-          read_result # BEGIN
-          read_result # PULL_ALL
           read_result # RUN
           result = read_result
           until result.is_a?(Neo4j::Response)
             yield result.as(List)
             result = read_result
           end
-          read_result # COMMIT
-          read_result # PULL_ALL
 
           result.as Response
         end
@@ -274,7 +274,15 @@ module Neo4j
       # ```
       def exec_cast(query : String, parameters : NamedTuple, types : Tuple(*TYPES)) forall TYPES
         params = Neo4j::Map.new
-        parameters.each { |key, value| params[key.to_s] = value }
+        parameters.each do |key, value|
+          params[key.to_s] =
+            case value
+            when Array
+              value.map(&.as(Neo4j::Value))
+            else
+              value
+            end
+        end
         exec_cast query, params, types
       end
 
@@ -332,17 +340,34 @@ module Neo4j
 
           result = read_raw_result
 
+          error = nil
           until result[1] != 0x71
-            # First 3 bytes are Structure, Record, and List
-            # TODO: If the RETURN clause in the query has more than 16 items,
-            # this will break because the List byte marker and its size won't be
-            # in a single byte. We'll need to detect this here.
-            io = IO::Memory.new(result + 3)
+            unless error
+              # First 3 bytes are Structure, Record, and List
+              # TODO: If the RETURN clause in the query has more than 16 items,
+              # this will break because the List byte marker and its size won't be
+              # in a single byte. We'll need to detect this here.
 
-            yield types.from_bolt(io)
+              io = IO::Memory.new(result + 3)
+              begin
+                yield types.from_bolt(io)
+              rescue e
+                error = e unless error
+              end
+            end
 
             result = read_raw_result
           end
+
+          if error
+            raise error
+          end
+        end
+      end
+
+      def exec_cast(query : String, types : Tuple(*TYPES), &block) : Nil forall TYPES
+        exec_cast query, Neo4j::Map.new, types do |row|
+          yield row
         end
       end
 
@@ -425,6 +450,10 @@ module Neo4j
         exec_cast_single(query, parameters, {type}).first
       end
 
+      def exec_cast_scalar(query : String, type : T) forall T
+        exec_cast_single(query, Neo4j::Map.new, {type}).first
+      end
+
       # Wrap a group of queries into an atomic transaction. Yields a
       # `Neo4j::Bolt::Transaction`.
       #
@@ -447,20 +476,16 @@ module Neo4j
 
         execute "BEGIN"
         yield(@transaction.not_nil!).tap { execute "COMMIT" }
-      rescue RollbackException
+      rescue e : RollbackException
         execute "ROLLBACK"
+        raise e
       rescue e : NestedTransactionError
         # We don't want our NestedTransactionError to be picked up by the
         # catch-all rescue below, so we're explicitly capturing and re-raising
         # here to bypass it
         reset
         raise e
-      rescue e : QueryException
-        ack_failure
-        execute "ROLLBACK"
-        reset
-        raise e
-      rescue e # Don't ack_failure if it wasn't a QueryException
+      rescue e
         execute "ROLLBACK"
         reset
         raise e
@@ -535,7 +560,7 @@ module Neo4j
         else
           raise ::Neo4j::UnknownResult.new("Cannot identify this result: #{result.inspect}")
         end
-      rescue ex : IO::EOFError | OpenSSL::SSL::Error | Errno
+      rescue ex : IO::Error | OpenSSL::SSL::Error
         if retries > 0
           initialize @uri, @ssl
           run statement, parameters, retries - 1
@@ -586,7 +611,7 @@ module Neo4j
         "Neo.ClientError.Schema.ConstraintValidationFailed" => ConstraintValidationFailed,
       }
       private def handle_result(result : Failure)
-        exception_class = EXCEPTIONS[result.attrs["code"]]? || QueryException
+        exception_class = EXCEPTIONS[result.attrs["code"].as(String)]? || QueryException
         raise exception_class.new(
           result.attrs["message"].as(String | Nil).to_s,
           result.attrs["code"].as(String),
@@ -661,7 +686,7 @@ module Neo4j
       private def retry(times)
         loop do
           return yield
-        rescue ex : IO::EOFError | OpenSSL::SSL::Error | Errno
+        rescue ex : IO::Error | OpenSSL::SSL::Error
           if times > 0
             initialize @uri, @ssl
             times -= 1
@@ -698,18 +723,23 @@ module Neo4j
 
       def initialize
         @channel = Channel(List).new(1)
+        @stop_channel = Channel(Nil).new(1)
         @complete = false
       end
 
       def next
-        if @complete && @channel.@queue.not_nil!.empty?
+        return stop if @complete
+
+        select
+        when value = @channel.receive
+          value
+        when @stop_channel.receive
           stop
-        else
-          @channel.receive
         end
       end
 
       def complete!
+        @stop_channel.send nil
         @complete = true
       end
     end

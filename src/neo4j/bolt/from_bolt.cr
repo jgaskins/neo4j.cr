@@ -114,10 +114,11 @@ def Union.from_bolt(io) : self
     {% if non_primitive_types.empty? %}
       raise ::Neo4j::UnknownType.new("Don't know how to cast #{unpacker.read_value.inspect} into #{{{T.join(" | ")}}}")
     {% else %}
+      node = unpacker.read_value.as(Neo4j::Node)
       {% for type in non_primitive_types %}
-        return {{type}}.new(unpacker.read_value.as(Neo4j::Node))
+        return {{type}}.new(node) if node.labels.includes?({{type.stringify}})
       {% end %}
-      raise ::Neo4j::UnknownType.new("Don't know how to cast #{structure.inspect} into #{{{T}}.inspect}")
+      raise ::Neo4j::UnknownType.new("Don't know how to cast #{node.inspect} into #{{{T}}.inspect}")
     {% end %}
   {% end %}
 end
