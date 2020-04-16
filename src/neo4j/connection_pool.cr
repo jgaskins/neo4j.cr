@@ -36,7 +36,7 @@ module Neo4j
     @mutex : Mutex
 
     def initialize(
-      @initial_pool_size = 1,
+      @initial_pool_size = 0,
       @max_pool_size = 0,
       @max_idle_pool_size = 1,
       @checkout_timeout = 5.seconds,
