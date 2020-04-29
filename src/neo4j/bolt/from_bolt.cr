@@ -38,6 +38,10 @@ def Array.from_bolt(io)
   new(token.size.to_i32) { T.from_bolt(io) }
 end
 
+def Hash.from_bolt(io)
+  Neo4j::PackStream::Unpacker.new(io).read_hash.as(Hash(K,V))
+end
+
 module Neo4j
   def Point2D.from_bolt(io)
     PackStream::Unpacker.new(io).read_structure.as(Point2D)
@@ -114,11 +118,43 @@ def Union.from_bolt(io) : self
     {% if non_primitive_types.empty? %}
       raise ::Neo4j::UnknownType.new("Don't know how to cast #{unpacker.read_value.inspect} into #{{{T.join(" | ")}}}")
     {% else %}
-      node = unpacker.read_value.as(Neo4j::Node)
+      value = unpacker.read_value #.as(Neo4j::Node)
       {% for type in non_primitive_types %}
-        return {{type}}.new(node) if node.labels.includes?({{type.stringify}})
+        {% if type.resolve.ancestors.includes? Neo4j::MappedNode %}
+          node = value.as(::Neo4j::Node)
+          return {{type}}.new(node) if node.labels.includes?({{type.stringify}})
+        {% elsif type.resolve.ancestors.includes? Neo4j::MappedRelationship %}
+          relationship = value.as(::Neo4j::Relationship)
+          return {{type}}.new(relationship)
+        {% end %}
       {% end %}
-      raise ::Neo4j::UnknownType.new("Don't know how to cast #{node.inspect} into #{{{T}}.inspect}")
+      raise ::Neo4j::UnknownType.new("Don't know how to cast #{value.inspect} into #{{{T.join(" | ")}}}")
     {% end %}
   {% end %}
+end
+
+class Object
+  def to_bolt_params : Neo4j::Value
+    as Neo4j::Value
+  end
+end
+
+class Hash
+  def to_bolt_params : Neo4j::Value
+    each_with_object(Neo4j::Map.new) do |(key, value), hash|
+      hash[key] = value.to_bolt_params.as(Neo4j::Value)
+    end.as(Neo4j::Value)
+  end
+end
+
+class Array
+  def to_bolt_params : Neo4j::Value
+    map(&.to_bolt_params.as(Neo4j::Value)).as Neo4j::Value
+  end
+end
+
+struct UUID
+  def to_bolt_params : Neo4j::Value
+    to_s.to_bolt_params
+  end
 end

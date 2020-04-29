@@ -5,7 +5,7 @@ module Neo4j
   class DirectDriver
     def initialize(@uri : URI, @ssl : Bool = true)
       @connection_pool = ConnectionPool.new(
-        initial_pool_size: 1,
+        initial_pool_size: 0,
         max_pool_size: 0, # 0 == unlimited
         max_idle_pool_size: 10,
         checkout_timeout: 5.seconds,
@@ -51,12 +51,30 @@ module Neo4j
         transaction { |txn| yield txn }
       end
 
+      # def execute(query : String, **params) forall T
+      #   transaction(&.execute(query, params))
+      # end
+
+      # def exec_cast(query : String, as types : Tuple(*T), **params) forall T
+      #   transaction(&.exec_cast(query, params, types) { |row| yield row })
+      # end
+      # def read_query(query : String, as types : Tuple(*T), **params) forall T
+      #   read_transaction(&.
+      # end
+      # def write_query(query : String, as types : Tuple(*T), **params) forall T
+
+      # end
+
       def transaction
         connection do |connection|
           connection.transaction do |txn|
             yield txn
           end
         end
+      end
+
+      def exec_cast(query : String, as types, **params)
+        transaction(&.exec_cast(query, params, types))
       end
 
       def connection : Bolt::Connection
@@ -76,6 +94,10 @@ module Neo4j
 
       def closed? : Bool
         @closed
+      end
+
+      def finalize
+        close
       end
     end
   end

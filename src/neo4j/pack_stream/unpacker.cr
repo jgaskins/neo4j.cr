@@ -154,10 +154,10 @@ module Neo4j
         when StructureTypes::Point2D.value
           type = read_int.to_i16
           case type
-          when 7203
-            Point2D.new(type: type, x: read_float, y: read_float)
           when 4326
             LatLng.new(type: type, longitude: read_float, latitude: read_float)
+          else
+            Point2D.new(type: type, x: read_float, y: read_float)
           end
         when StructureTypes::Point3D.value
           Point3D.new(

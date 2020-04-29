@@ -184,7 +184,7 @@ module Neo4j
         params_hash = Map.new
 
         parameters.each do |key, value|
-          params_hash[key.to_s] = value
+          params_hash[key.to_s] = value.to_bolt_params
         end
 
         execute _query, params_hash, &block
@@ -248,7 +248,7 @@ module Neo4j
       def execute(_query query, **params)
         params_hash = Map.new
 
-        params.each { |key, value| params_hash[key.to_s] = value }
+        params.each { |key, value| params_hash[key.to_s] = value.to_bolt_params }
 
         execute query, params_hash
       end
@@ -275,13 +275,7 @@ module Neo4j
       def exec_cast(query : String, parameters : NamedTuple, types : Tuple(*TYPES)) forall TYPES
         params = Neo4j::Map.new
         parameters.each do |key, value|
-          params[key.to_s] =
-            case value
-            when Array
-              value.map(&.as(Neo4j::Value))
-            else
-              value
-            end
+          params[key.to_s] = value.to_bolt_params
         end
         exec_cast query, params, types
       end
@@ -305,7 +299,7 @@ module Neo4j
       # ```
       def exec_cast(query : String, parameters : NamedTuple, types : Tuple(*TYPES), &block) forall TYPES
         params = Neo4j::Map.new
-        parameters.each { |key, value| params[key.to_s] = value }
+        parameters.each { |key, value| params[key.to_s] = value.to_bolt_params }
         exec_cast query, params, types do |row|
           yield row
         end
@@ -602,6 +596,8 @@ module Neo4j
           case result
           when Response
             handle_result result
+          else
+            # Probably don't need to do anything with Value results
           end
         end
       end

@@ -45,6 +45,7 @@ module Neo4j
       connection = Bolt::Connection.new(entrypoint, ssl: @ssl)
 
       ttl, raw_servers = connection.execute("call dbms.cluster.routing.getServers()").data.first
+      connection.close
       servers = raw_servers
         .as(Array)
         .map(&.as(Map))

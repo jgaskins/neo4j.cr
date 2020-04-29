@@ -27,10 +27,19 @@ module Neo4j
     def self.deserialize(value)
       UUID.new(value.as(String))
     end
+
+    def self.serialize(value : UUID) : Neo4j::Value
+      value.to_bolt_params
+    end
   end
 
   macro map_relationship(**__properties__)
     ::Neo4j.map_relationship({{__properties__}})
+  end
+
+  module MappedNode
+  end
+  module MappedRelationship
   end
 
   macro map_relationship(__properties__)
@@ -38,6 +47,8 @@ module Neo4j
     getter node_start : Int64
     getter node_end : Int64
     getter relationship_type : String
+
+    include ::Neo4j::MappedRelationship
 
     ::Neo4j.map_props({{__properties__}}, ::Neo4j::Relationship)
   end
@@ -49,6 +60,8 @@ module Neo4j
   macro map_node(__properties__)
     getter node_id : Int64
     getter node_labels : Array(String)
+
+    include ::Neo4j::MappedNode
 
     ::Neo4j.map_props({{__properties__}}, ::Neo4j::Node)
   end
@@ -140,6 +153,31 @@ module Neo4j
           @{{key.id}} = %property_value.as({{value[:type]}}{{(value[:nilable] && !value[:optional] ? "?" : "").id}})
         {% end %}
       {% end %}
+    end
+
+    def initialize(
+      {% for key, value in __properties__ %}
+        @{{key.id}} : {{value[:type]}}{{value[:default] ? " = #{value[:default]}".id : "".id}},
+      {% end %}
+
+      {% if type.resolve == ::Neo4j::Node %}
+        @node_id = 0i64,
+        @node_labels = [] of String,
+      {% elsif type.resolve == ::Neo4j::Relationship %}
+        @relationship_id = 0i64,
+        @node_start = 0i64,
+        @node_end = 0i64,
+        @relationship_type = "",
+      {% end %}
+    )
+    end
+
+    def to_bolt_params : Neo4j::Value
+      ::Neo4j::Map {
+        {% for var, type in __properties__ %}
+          {{var.stringify}} => {{type[:converter] ? "#{type[:converter]}.serialize(#{var.id})".id : var.id }}.to_bolt_params,
+        {% end %}
+      }.as(Neo4j::Value)
     end
   end
 end
