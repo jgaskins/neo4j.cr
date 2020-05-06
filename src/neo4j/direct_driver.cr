@@ -1,8 +1,9 @@
 require "./connection_pool"
 require "./session"
+require "./driver"
 
 module Neo4j
-  class DirectDriver
+  class DirectDriver < Driver
     def initialize(@uri : URI, @ssl : Bool = true)
       @connection_pool = ConnectionPool.new(
         initial_pool_size: 0,
@@ -43,12 +44,28 @@ module Neo4j
       def initialize(@driver : DirectDriver)
       end
 
-      def write_transaction
-        transaction { |txn| yield txn }
+      def write_transaction(retries = 5)
+        loop do
+          return transaction { |txn| yield txn }
+        rescue ex
+          if retries <= 0
+            raise ex
+          else
+            retries -= 1
+          end
+        end
       end
 
-      def read_transaction
-        transaction { |txn| yield txn }
+      def read_transaction(retries = 5)
+        loop do
+          return transaction { |txn| yield txn }
+        rescue ex
+          if retries <= 0
+            raise ex
+          else
+            retries -= 1
+          end
+        end
       end
 
       # def execute(query : String, **params) forall T

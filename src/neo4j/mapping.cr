@@ -109,7 +109,7 @@ module Neo4j
     {% end %}
 
     def self.from_bolt(io)
-      new ::Neo4j::PackStream::Unpacker.new(io).read_structure.as(::Neo4j::Node)
+      new ::Neo4j::PackStream::Unpacker.new(io).read_structure.as({{type}})
     end
 
     def initialize(%node : {{type}})

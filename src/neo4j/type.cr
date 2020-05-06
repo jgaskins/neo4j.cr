@@ -162,7 +162,6 @@ module Neo4j
   alias Response = Success | Failure | Ignored
 
   alias Type = Value | Response
-  alias Driver = Cluster | DirectDriver
 end
 
 struct Time

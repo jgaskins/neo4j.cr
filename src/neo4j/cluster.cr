@@ -3,9 +3,10 @@ require "uri"
 require "./bolt/connection"
 require "./connection_pool"
 require "./session"
+require "./driver"
 
 module Neo4j
-  class Cluster
+  class Cluster < Driver
     @check_again_in : Time::Span
     @read_servers : ConnectionPool
     @write_servers : ConnectionPool
