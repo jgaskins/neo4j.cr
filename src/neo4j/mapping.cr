@@ -3,7 +3,8 @@ require "./exceptions"
 
 module Neo4j
   module TimeConverter
-    def self.serialize(time)
+    def self.serialize(time : Time) : Value
+      time.to_bolt_params
     end
 
     def self.deserialize(value)
@@ -25,7 +26,11 @@ module Neo4j
 
   module UUIDConverter
     def self.deserialize(value)
-      UUID.new(value.as(String))
+      raise "Cannot convert #{value.inspect} to UUID"
+    end
+
+    def self.deserialize(value : String)
+      UUID.new(value)
     end
 
     def self.serialize(value : UUID) : Neo4j::Value

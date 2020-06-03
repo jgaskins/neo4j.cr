@@ -143,7 +143,7 @@ module Neo4j
           begin
             connection.execute "create index on :Foo(id)"
             connection.execute "create constraint on (foo:Foo) assert foo.id is unique"
-            raise Exception.new("Creating duplicate constraint did not ")
+            raise Exception.new("Creating duplicate constraint did not invoke IndexAlreadyExists")
           rescue ex : IndexAlreadyExists
           rescue ex
             raise Exception.new("Expected IndexAlreadyExists, got #{ex.inspect}")
@@ -579,10 +579,8 @@ module Neo4j
 
               connection.exec_cast query, Map{"id" => "123"}, {Subscription, User?} do |(subscription, user)|
                 if subscription.amount_cents == 100_00
-                  pp user
                   user.should be_a User
                 elsif subscription.amount_cents == 50_00
-                  pp user
                   user.should eq nil
                 end
               end

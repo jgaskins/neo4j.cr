@@ -10,11 +10,11 @@ struct MappingNodeExample
     nilable_value: { type: String, nilable: true },
     nilable_question_mark: Int::Signed?,
     nonexistent_on_node: Int64?,
-    int_with_default: { type: Int32, default: 0 },
-    string_with_default: { type: String, default: "hi" },
     string_with_other_key: { type: String, key: "stringWithOtherKey" },
     datestamp: { type: Time, converter: DateStampConversion, key: "date" },
     optional_datestamp: { type: Time?, converter: DateStampConversion, key: "optional_date" },
+    int_with_default: { type: Int32, default: 0 },
+    string_with_default: { type: String, default: "hi" },
   )
 
   module DateStampConversion

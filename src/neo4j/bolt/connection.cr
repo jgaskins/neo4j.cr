@@ -211,14 +211,14 @@ module Neo4j
           send Commands::Run, query, parameters
           send Commands::PullAll
 
-          read_result # RUN
+          run_result = read_result # RUN
           result = read_result
           until result.is_a?(Neo4j::Response)
             yield result.as(List)
             result = read_result
           end
 
-          result.as Response
+          {run_result.as(Response), result.as(Response)}
         end
       end
 
@@ -229,11 +229,10 @@ module Neo4j
       # connection.execute(query, Neo4j::Map { "id" => 123 })
       # ```
       def execute(query, parameters : Map)
-        if @transaction
-          Result.new(type: run(query, parameters), data: pull_all)
-        else
-          transaction { execute query, parameters }
-        end
+        Result.new(type: run(query, parameters), data: pull_all)
+      rescue e
+        reset unless @transaction # Let the transaction handle this
+        raise e
       end
 
       # Execute the given query with the given parameters, returning a Result
@@ -472,7 +471,6 @@ module Neo4j
         yield(@transaction.not_nil!).tap { execute "COMMIT" }
       rescue e : RollbackException
         execute "ROLLBACK"
-        raise e
       rescue e : NestedTransactionError
         # We don't want our NestedTransactionError to be picked up by the
         # catch-all rescue below, so we're explicitly capturing and re-raising
