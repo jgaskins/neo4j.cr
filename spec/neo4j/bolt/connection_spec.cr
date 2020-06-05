@@ -151,6 +151,22 @@ module Neo4j
             connection.execute "drop index on :Foo(id)"
           end
 
+          begin
+            connection.transaction do |t|
+              connection.exec_cast "return $oops", {wrong: "name"}, {String} do |(string)|
+                pp string
+              end
+            end
+          rescue ex : ParameterMissing
+          end
+
+          begin
+            connection.exec_cast "with 42 as foo return fo", {Int64}, do |(foo)|
+              pp foo
+            end
+          rescue ex : SyntaxError
+          end
+
           result = connection.execute "return 42"
 
           result.first.first.should eq 42

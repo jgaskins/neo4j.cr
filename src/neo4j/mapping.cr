@@ -34,7 +34,7 @@ module Neo4j
     end
 
     def self.serialize(value : UUID) : Neo4j::Value
-      value.to_bolt_params
+      value.to_s.to_bolt_params
     end
   end
 

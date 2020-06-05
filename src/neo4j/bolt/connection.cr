@@ -211,14 +211,15 @@ module Neo4j
           send Commands::Run, query, parameters
           send Commands::PullAll
 
-          run_result = read_result # RUN
+          response = read_result.as(Response) # RUN
+          handle_result response
           result = read_result
           until result.is_a?(Neo4j::Response)
             yield result.as(List)
             result = read_result
           end
 
-          {run_result.as(Response), result.as(Response)}
+          {response, result.as(Response)}
         end
       end
 
@@ -326,14 +327,13 @@ module Neo4j
           send Commands::Run, query, parameters
           send Commands::PullAll
 
-          result = read_result
-          if result.is_a? Failure
-            raise ::Neo4j::QueryException.new(result.attrs["message"].as(String), result.attrs["code"].as(String))
+          query_result = read_result.as(Response)
+          result = read_raw_result
+          error = nil
+          if query_result.is_a? Failure
+            error = Exception.new
           end
 
-          result = read_raw_result
-
-          error = nil
           until result[1] != 0x71
             unless error
               # First 3 bytes are Structure, Record, and List
@@ -351,6 +351,12 @@ module Neo4j
 
             result = read_raw_result
           end
+
+          if error
+            ack_failure
+          end
+
+          handle_result query_result
 
           if error
             raise error
@@ -590,19 +596,14 @@ module Neo4j
       end
 
       private def read_result
-        PackStream.unpack(read_raw_result).tap do |result|
-          case result
-          when Response
-            handle_result result
-          else
-            # Probably don't need to do anything with Value results
-          end
-        end
+        PackStream.unpack(read_raw_result)
       end
 
       EXCEPTIONS = {
         "Neo.ClientError.Schema.IndexAlreadyExists" => IndexAlreadyExists,
         "Neo.ClientError.Schema.ConstraintValidationFailed" => ConstraintValidationFailed,
+        "Neo.ClientError.Statement.ParameterMissing" => ParameterMissing,
+        "Neo.ClientError.Statement.SyntaxError" => SyntaxError,
       }
       private def handle_result(result : Failure)
         exception_class = EXCEPTIONS[result.attrs["code"].as(String)]? || QueryException

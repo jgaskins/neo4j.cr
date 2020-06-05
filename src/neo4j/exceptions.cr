@@ -23,6 +23,12 @@ module Neo4j
   class ConstraintValidationFailed < QueryException
   end
 
+  class ParameterMissing < QueryException
+  end
+
+  class SyntaxError < QueryException
+  end
+
   class RollbackException < Exception
   end
 
