@@ -207,20 +207,18 @@ module Neo4j
       # a `Neo4j::Node`. All values in results have the compile-time type of
       # `Neo4j::Value` and so will need to be cast down to its specific type.
       def execute(query, parameters : Map, &block : List ->)
-        retry 5 do
-          send Commands::Run, query, parameters
-          send Commands::PullAll
+        send Commands::Run, query, parameters
+        send Commands::PullAll
 
-          response = read_result.as(Response) # RUN
-          handle_result response
+        response = read_result.as(Response) # RUN
+        handle_result response
+        result = read_result
+        until result.is_a?(Neo4j::Response)
+          yield result.as(List)
           result = read_result
-          until result.is_a?(Neo4j::Response)
-            yield result.as(List)
-            result = read_result
-          end
-
-          {response, result.as(Response)}
         end
+
+        {response, result.as(Response)}
       end
 
       # Execute the given query with the given parameters, returning a Result
@@ -323,44 +321,42 @@ module Neo4j
       # end
       # ```
       def exec_cast(query : String, parameters : Map, types : Tuple(*TYPES), &block) : Nil forall TYPES
-        retry 5 do
-          send Commands::Run, query, parameters
-          send Commands::PullAll
+        send Commands::Run, query, parameters
+        send Commands::PullAll
 
-          query_result = read_result.as(Response)
-          result = read_raw_result
-          error = nil
-          if query_result.is_a? Failure
-            error = Exception.new
-          end
+        query_result = read_result.as(Response)
+        result = read_raw_result
+        error = nil
+        if query_result.is_a? Failure
+          error = ::Neo4j::QueryException.new(query_result.attrs["message"].as(String), query_result.attrs["code"].as(String))
+        end
 
-          until result[1] != 0x71
-            unless error
-              # First 3 bytes are Structure, Record, and List
-              # TODO: If the RETURN clause in the query has more than 16 items,
-              # this will break because the List byte marker and its size won't be
-              # in a single byte. We'll need to detect this here.
+        until result[1] != 0x71
+          unless error
+            # First 3 bytes are Structure, Record, and List
+            # TODO: If the RETURN clause in the query has more than 16 items,
+            # this will break because the List byte marker and its size won't be
+            # in a single byte. We'll need to detect this here.
 
-              io = IO::Memory.new(result + 3)
-              begin
-                yield types.from_bolt(io)
-              rescue e
-                error = e unless error
-              end
+            io = IO::Memory.new(result + 3)
+            begin
+              yield types.from_bolt(io)
+            rescue e
+              error = e unless error
             end
-
-            result = read_raw_result
           end
 
-          if error
-            ack_failure
-          end
+          result = read_raw_result
+        end
 
-          handle_result query_result
+        if error
+          ack_failure
+        end
 
-          if error
-            raise error
-          end
+        handle_result query_result
+
+        if error
+          raise error
         end
       end
 
