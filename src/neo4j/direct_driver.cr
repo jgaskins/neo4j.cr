@@ -8,7 +8,7 @@ module Neo4j
       @connection_pool = ConnectionPool.new(
         initial_pool_size: 0,
         max_pool_size: 0, # 0 == unlimited
-        max_idle_pool_size: 10,
+        max_idle_pool_size: 20,
         checkout_timeout: 5.seconds,
         retry_attempts: 3,
         retry_delay: 200.milliseconds,
