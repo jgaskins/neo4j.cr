@@ -24,14 +24,14 @@ module Neo4j
     # connections available for checkout
     @idle = Set(Bolt::Connection).new
     # connections waiting to be stablished (they are not in *@idle* nor in *@total*)
-    @inflight : Int32
+    @inflight : Atomic(Int32)
 
     # Sync state
 
     # communicate that a connection is available for checkout
     @availability_channel : Channel(Nil)
     # signal how many existing connections are waited for
-    @waiting_resource : Int32
+    @waiting_resource : Atomic(Int32)
     # global pool mutex
     @mutex : Mutex
 
@@ -45,11 +45,11 @@ module Neo4j
       &@factory : -> Bolt::Connection
     )
       @availability_channel = Channel(Nil).new
-      @waiting_resource = 0
-      @inflight = 0
+      @waiting_resource = Atomic.new(0)
+      @inflight = Atomic.new(0)
       @mutex = Mutex.new
 
-      @initial_pool_size.times { build_resource }
+      @initial_pool_size.times { spawn build_resource }
     end
 
     # close all resources in the pool
@@ -82,9 +82,9 @@ module Neo4j
         until resource
           resource = if @idle.empty?
                        if can_increase_pool?
-                         @inflight += 1
+                         @inflight.add 1
                          r = unsync { build_resource }
-                         @inflight -= 1
+                         @inflight.sub 1
                          r
                        else
                          unsync { wait_for_available }
@@ -209,7 +209,7 @@ module Neo4j
     end
 
     private def can_increase_pool?
-      @max_pool_size == 0 || @total.size + @inflight < @max_pool_size
+      @max_pool_size == 0 || @total.size + @inflight.get < @max_pool_size
     end
 
     private def can_increase_idle_pool
@@ -241,15 +241,15 @@ module Neo4j
     end
 
     private def sync_inc_waiting_resource
-      sync { @waiting_resource += 1 }
+      @waiting_resource.add 1
     end
 
     private def sync_dec_waiting_resource
-      sync { @waiting_resource -= 1 }
+      @waiting_resource.sub 1
     end
 
     private def are_waiting_for_resource?
-      @waiting_resource > 0
+      @waiting_resource.get > 0
     end
 
     private def sync
