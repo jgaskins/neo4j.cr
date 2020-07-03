@@ -44,7 +44,7 @@ module Neo4j
       def initialize(@driver : DirectDriver)
       end
 
-      def write_transaction(retries = 5)
+      def write_transaction(retries = 0)
         loop do
           return transaction { |txn| yield txn }
         rescue ex
@@ -56,7 +56,7 @@ module Neo4j
         end
       end
 
-      def read_transaction(retries = 5)
+      def read_transaction(retries = 0)
         loop do
           return transaction { |txn| yield txn }
         rescue ex
