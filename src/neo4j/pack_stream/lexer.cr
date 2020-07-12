@@ -1,4 +1,5 @@
 require "./token"
+require "../pack_stream"
 
 module Neo4j
   module PackStream
@@ -87,7 +88,9 @@ module Neo4j
           @token.int_value = current_byte.to_i8
         when 0xF0..0xFF
           @token.type = Token::Type::Int
-          @token.int_value = current_byte.to_i8
+          # Allow overflow to make this negative, because that's actually the
+          # point of this range of values.
+          @token.int_value = current_byte.to_i8!
         else
           unexpected_byte!
         end
