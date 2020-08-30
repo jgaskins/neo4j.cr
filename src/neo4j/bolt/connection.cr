@@ -427,6 +427,7 @@ module Neo4j
           "credentials" => password,
           "user_agent"  => "Neo4j.cr/#{VERSION}",
         }
+        @connection.flush
 
         case result = read_result
         when Success
@@ -487,6 +488,7 @@ module Neo4j
             msg.write field
           end
         end
+        @data_waiting = true
       end
 
       private def pull_all(&block) : Nil
