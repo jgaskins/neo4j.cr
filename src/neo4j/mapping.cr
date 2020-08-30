@@ -8,7 +8,7 @@ module Neo4j
     end
 
     def self.deserialize(value)
-      raise ArgumentError.new("Property {{key.id}} must be a String or Int value to cast into a Time")
+      raise ::ArgumentError.new("Property {{key.id}} must be a String or Int value to cast into a Time")
     end
 
     def self.deserialize(value : String) : Time
@@ -44,6 +44,7 @@ module Neo4j
 
   module MappedNode
   end
+
   module MappedRelationship
   end
 
@@ -74,7 +75,7 @@ module Neo4j
   macro map_props(__properties__, type)
     {% for key, value in __properties__ %}
       {% unless value.is_a?(HashLiteral) || value.is_a?(NamedTupleLiteral) %}
-        {% __properties__[key] = { type: value } %}
+        {% __properties__[key] = {type: value} %}
       {% end %}
       {% __properties__[key][:key_id] = key.id.gsub(/\?$/, "") %}
       {% if __properties__[key][:type].is_a?(Generic) && __properties__[key][:type].type_vars.any?(&.resolve.nilable?) %}
@@ -136,9 +137,9 @@ module Neo4j
             nil
           {% else %}
             {% if type.resolve == ::Neo4j::Node %}
-              raise ::Neo4j::PropertyMissing.new("Node with id #{@node_id} and labels #{@node_labels.inspect} is missing property #{key}")
+              raise ::Neo4j::PropertyMissing.new("Node with id #{@node_id} and labels #{@node_labels.inspect} is missing property #{key.inspect}")
             {% elsif type.resolve == ::Neo4j::Relationship %}
-              raise ::Neo4j::PropertyMissing.new("Relationship with id #{@relationship_id} and type #{@relationship_type.inspect} is missing property #{key}")
+              raise ::Neo4j::PropertyMissing.new("Relationship with id #{@relationship_id} and type #{@relationship_type.inspect} is missing property #{key.inspect}")
             {% end %}
           {% end %}
         end
@@ -160,27 +161,27 @@ module Neo4j
       {% end %}
     end
 
-    def initialize(
-      {% for key, value in __properties__ %}
-        @{{key.id}} : {{value[:type]}}{{value[:default] ? " = #{value[:default]}".id : "".id}},
-      {% end %}
+    # def initialize(
+    #   {% for key, value in __properties__ %}
+    #     @{{key.id}} : {{value[:type]}}{{value[:default] ? " = #{value[:default]}".id : "".id}},
+    #   {% end %}
 
-      {% if type.resolve == ::Neo4j::Node %}
-        @node_id = 0i64,
-        @node_labels = [] of String,
-      {% elsif type.resolve == ::Neo4j::Relationship %}
-        @relationship_id = 0i64,
-        @node_start = 0i64,
-        @node_end = 0i64,
-        @relationship_type = "",
-      {% end %}
-    )
-    end
+    #   {% if type.resolve == ::Neo4j::Node %}
+    #     @node_id = 0i64,
+    #     @node_labels = [] of String,
+    #   {% elsif type.resolve == ::Neo4j::Relationship %}
+    #     @relationship_id = 0i64,
+    #     @node_start = 0i64,
+    #     @node_end = 0i64,
+    #     @relationship_type = "",
+    #   {% end %}
+    # )
+    # end
 
     def to_bolt_params : Neo4j::Value
       ::Neo4j::Map {
         {% for var, type in __properties__ %}
-          {{var.stringify}} => {{type[:converter] ? "#{type[:converter]}.serialize(#{var.id})".id : var.id }}.to_bolt_params,
+          {{var.stringify}} => {{type[:converter] ? "#{type[:converter]}.serialize(#{var.id})".id : var.id}}.to_bolt_params,
         {% end %}
       }.as(Neo4j::Value)
     end

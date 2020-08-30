@@ -9,8 +9,11 @@ require "./neo4j/driver"
 
 module Neo4j
   def self.connect(uri : URI, ssl : Bool = true) : Driver
-    if uri.scheme == "bolt+routing" || uri.scheme == "neo4j"
+    case uri.scheme
+    when "bolt+routing", "neo4j"
       Cluster.new(uri, ssl)
+    when "neo4j+s"
+      Cluster.new(uri, true)
     else
       DirectDriver.new(uri, ssl)
     end

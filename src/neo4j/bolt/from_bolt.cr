@@ -39,7 +39,7 @@ def Array.from_bolt(io)
 end
 
 def Hash.from_bolt(io)
-  Neo4j::PackStream::Unpacker.new(io).read_hash.as(Hash(K,V))
+  Neo4j::PackStream::Unpacker.new(io).read_hash.as(Hash(K, V))
 end
 
 module Neo4j
@@ -94,11 +94,10 @@ def Union.from_bolt(io) : self
     {% if T.any? { |type| type < Int } %}
       if token.type.int?
         {% largest_int_size = T
-          .select { |t| t.stringify.includes? "Int" }
-          .map { |t| t.stringify.gsub(/Int/, "").to_i }
-          .sort
-          .last
-        %}
+             .select { |t| t.stringify.includes? "Int" }
+             .map { |t| t.stringify.gsub(/Int/, "").to_i }
+             .sort
+             .last %}
         return unpacker.read_int.to_i{{largest_int_size}}
       end
     {% end %}

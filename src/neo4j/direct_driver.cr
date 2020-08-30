@@ -11,7 +11,7 @@ module Neo4j
         max_idle_pool_size: 20,
         checkout_timeout: 5.seconds,
         retry_attempts: 3,
-        retry_delay: 200.milliseconds,
+        retry_delay: 200.milliseconds
       ) do
         Bolt::Connection.new(uri, ssl: ssl)
       end
@@ -26,6 +26,26 @@ module Neo4j
       yield session
     ensure
       session.close if session
+    end
+
+    def write_query(query : String, **params)
+      connection(&.execute(query, **params))
+    end
+
+    def read_query(query : String, as types : Tuple(*T), **params, &) forall T
+      connection(&.exec_cast(query, params, types) { |row| yield row })
+    end
+
+    def read_query(query : String, as types : Tuple(*T), **params) forall T
+      connection(&.exec_cast(query, params, types))
+    end
+
+    def write_query(query : String, as types : Tuple(*T), **params, &) forall T
+      connection(&.exec_cast(query, params, types) { |row| yield row })
+    end
+
+    def write_query(query : String, as types : Tuple(*T), **params) forall T
+      connection(&.exec_cast(query, params, types))
     end
 
     def connection
@@ -67,20 +87,6 @@ module Neo4j
           end
         end
       end
-
-      # def execute(query : String, **params) forall T
-      #   transaction(&.execute(query, params))
-      # end
-
-      # def exec_cast(query : String, as types : Tuple(*T), **params) forall T
-      #   transaction(&.exec_cast(query, params, types) { |row| yield row })
-      # end
-      # def read_query(query : String, as types : Tuple(*T), **params) forall T
-      #   read_transaction(&.
-      # end
-      # def write_query(query : String, as types : Tuple(*T), **params) forall T
-
-      # end
 
       def transaction
         connection do |connection|

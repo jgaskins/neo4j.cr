@@ -12,18 +12,23 @@ require "openssl"
 module Neo4j
   module Bolt
     class Connection
-      GOGOBOLT = "\x60\x60\xB0\x17".to_slice
-      SUPPORTED_VERSIONS = { 2, 0, 0, 0 }
+      GOGOBOLT           = "\x60\x60\xB0\x17".to_slice
+      SUPPORTED_VERSIONS = {4, 0, 0, 0}
       enum Commands
-        Init       = 0x01
-        Run        = 0x10
-        PullAll    = 0x3F
-        AckFailure = 0x0E
-        Reset      = 0x0F
+        Hello    = 0x01
+        Goodbye  = 0x02
+        Reset    = 0x0f
+        Run      = 0x10
+        Begin    = 0x11
+        Commit   = 0x12
+        Rollback = 0x13
+        Discard  = 0x2f
+        Pull     = 0x3f
       end
 
       @connection : (TCPSocket | OpenSSL::SSL::Socket::Client)
       @transaction : Transaction?
+      @data_waiting = false
 
       def initialize
         initialize "bolt://neo4j:neo4j@localhost:7687", ssl: false
@@ -46,24 +51,24 @@ module Neo4j
       # uri = URI.parse("bolt://neo4j:password@localhost")
       # connection = Neo4j::Bolt::Connection.new(uri, ssl: false)
       # ```
-      def initialize(@uri : URI, @ssl=true, connection_retries = 5)
+      def initialize(@uri : URI, @ssl = true, connection_retries = 5)
         host = uri.host.to_s
         port = uri.port || 7687
         username = uri.user.to_s
         password = uri.password.to_s
 
         if uri.scheme != "bolt"
-          raise ArgumentError.new("Connection must use Bolt")
+          raise ::ArgumentError.new("Connection must use Bolt")
         end
 
         @connection = loop do
-                        break TCPSocket.new(host, port)
-                      rescue ex
-                        connection_retries -= 1
-                        if connection_retries < 0
-                          raise ex
-                        end
-                      end
+          break TCPSocket.new(host, port)
+        rescue ex
+          connection_retries -= 1
+          if connection_retries < 0
+            raise ex
+          end
+        end
 
         if ssl
           context = OpenSSL::SSL::Context::Client.new
@@ -76,108 +81,6 @@ module Neo4j
         handshake
 
         init username, password
-      end
-
-      # Returns a streaming iterator that consumes results lazily from the
-      # Neo4j server. This can be used when the result set is very large so that
-      # your application does not need to retain the full result set in memory.
-      #
-      # ```
-      # results = connection.stream(query, user_id: user.id)
-      #
-      # results.each do |(user)|
-      #   process User.new(user.as(Neo4j:Node))
-      # end
-      # ```
-      #
-      # This example yields each result as it comes back from the database, but
-      # makes the query metadata available immediately.
-      #
-      # *NOTE:* You can only consume these results once. Anything that calls
-      #   `Enumerable#each(&block)` will fully consume all results. This means
-      #   calls like `Enumerable#first` and `Enumerable#size` are destructive.
-      #   This is a side effect of using the streaming iterator.
-      #
-      # *NOTE:* If you are using a connection pool, you *must* consume all of
-      #   the results before the connection goes back into the pool. Otherwise,
-      #   the connection will be in an inconsistent state and you will need to
-      #   manually `Neo4j::Bolt::Connection#reset` it.
-      #
-      # ```
-      # pool.connection do |connection|
-      #   results = connection.stream(query)
-      #   results.each do |(user)|
-      #     process User.new(user.as Neo4j::Node)
-      #   end
-      # ensure
-      #   results.each {} # Finish consuming the results
-      # end
-      # ```
-      def stream(_query, **parameters)
-        stream(_query, parameters.to_h.transform_keys(&.to_s))
-      end
-
-      # Returns a streaming iterator that consumes results lazily from the
-      # Neo4j server. This can be used when the result set is very large so that
-      # your application does not need to retain the full result set in memory.
-      #
-      # ```
-      # results = connection.stream(query, Neo4j::Map { "user_id" => user.id })
-      #
-      # results.each do |(user)|
-      #   process User.new(user.as(Neo4j:Node))
-      # end
-      # ```
-      #
-      # This example yields each result as it comes back from the database, but
-      # makes the query metadata available immediately.
-      #
-      # *NOTE:* You can only consume these results once. Anything that calls
-      #   `Enumerable#each(&block)` will fully consume all results. This means
-      #   calls like `Enumerable#first` and `Enumerable#size` are destructive.
-      #   This is a side effect of using the streaming iterator.
-      #
-      # *NOTE:* If you are using a connection pool, you *must* consume all of
-      #   the results before the connection goes back into the pool. Otherwise,
-      #   the connection will be in an inconsistent state and you will need to
-      #   manually `Neo4j::Bolt::Connection#reset` it.
-      #
-      # ```
-      # pool.connection do |connection|
-      #   results = connection.stream(query)
-      #   results.each do |(user)|
-      #     process User.new(user.as Neo4j::Node)
-      #   end
-      # ensure
-      #   results.each {} # Finish consuming the results
-      # end
-      # ```
-      def stream(query, parameters = Map.new)
-        StreamingResult.new(
-          type: run(query, parameters),
-          data: stream_results,
-        )
-      end
-
-      private def stream_results
-        send Commands::PullAll
-        results = StreamingResultSet.new
-
-        result = read_result
-        case result
-        when Success, Ignored
-          results.complete!
-        else
-          spawn do
-            until result.is_a?(Success) || result.is_a?(Ignored)
-              results << result.as(List)
-              result = read_result
-            end
-            results.complete!
-          end
-        end
-
-        results
       end
 
       def execute(_query, **parameters, &block : List ->)
@@ -194,7 +97,7 @@ module Neo4j
       # block once for each result returned from the database.
       #
       # ```
-      # connection.execute <<-CYPHER, Neo4j::Map { "id" => 123 } do |(user)|
+      # connection.execute <<-CYPHER, Neo4j::Map{"id" => 123} do |(user)|
       #   MATCH (user:User { id: $id })
       #   RETURN user
       # CYPHER
@@ -206,18 +109,18 @@ module Neo4j
       # the list of `RETURN`ed values. Also note that we need to cast it down to
       # a `Neo4j::Node`. All values in results have the compile-time type of
       # `Neo4j::Value` and so will need to be cast down to its specific type.
-      def execute(query, parameters : Map, &block : List ->)
-        send Commands::Run, query, parameters
-        send Commands::PullAll
+      def execute(query, parameters : Map, metadata = Map.new, &block : List ->)
+        send Commands::Run, query, parameters, metadata
+        send Commands::Pull, Map{"n" => -1}
 
         response = read_result.as(Response) # RUN
-        handle_result response
         result = read_result
         until result.is_a?(Neo4j::Response)
           yield result.as(List)
           result = read_result
         end
 
+        handle_result response
         {response, result.as(Response)}
       end
 
@@ -225,12 +128,15 @@ module Neo4j
       # object containing query metadata and the query results in an array.
       #
       # ```
-      # connection.execute(query, Neo4j::Map { "id" => 123 })
+      # connection.execute(query, Neo4j::Map{"id" => 123})
       # ```
-      def execute(query, parameters : Map)
-        Result.new(type: run(query, parameters), data: pull_all)
+      def execute(query, parameters : Map, metadata = Map.new)
+        Result.new(type: run(query, parameters, metadata), data: pull_all)
       rescue e
-        reset unless @transaction # Let the transaction handle this
+        begin
+          reset unless @transaction # Let the transaction handle this
+        rescue another_ex
+        end
         raise e
       end
 
@@ -265,12 +171,13 @@ module Neo4j
       #     email: String,
       #   )
       # end
-      # connection.exec_cast(<<-CYPHER, { email: "me@example.com" }, {User})
+      #
+      # connection.exec_cast(<<-CYPHER, {email: "me@example.com"}, {User})
       #   MATCH (user:User { email: $email })
       #   RETURN user
       # CYPHER
       # ```
-      def exec_cast(query : String, parameters : NamedTuple, types : Tuple(*TYPES)) forall TYPES
+      def exec_cast(query : String, parameters : NamedTuple, types : Tuple)
         params = Neo4j::Map.new
         parameters.each do |key, value|
           params[key.to_s] = value.to_bolt_params
@@ -288,14 +195,15 @@ module Neo4j
       #     email: String,
       #   )
       # end
-      # connection.exec_cast(<<-CYPHER, { email: "me@example.com" }, {User}) do |(user)|
+      #
+      # connection.exec_cast(<<-CYPHER, {email: "me@example.com"}, {User}) do |(user)|
       #   MATCH (user:User { email: $email })
       #   RETURN user
       # CYPHER
       #   process user
       # end
       # ```
-      def exec_cast(query : String, parameters : NamedTuple, types : Tuple(*TYPES), &block) forall TYPES
+      def exec_cast(query : String, parameters : NamedTuple, types : Tuple, &block)
         params = Neo4j::Map.new
         parameters.each { |key, value| params[key.to_s] = value.to_bolt_params }
         exec_cast query, params, types do |row|
@@ -313,22 +221,23 @@ module Neo4j
       #     email: String,
       #   )
       # end
-      # connection.exec_cast(<<-CYPHER, Neo4j::Map { "email" => "me@example.com" }, {User}) do |(user)|
+      #
+      # connection.exec_cast(<<-CYPHER, Neo4j::Map{"email" => "me@example.com"}, {User}) do |(user)|
       #   MATCH (user:User { email: $email })
       #   RETURN user
       # CYPHER
       #   process user
       # end
       # ```
-      def exec_cast(query : String, parameters : Map, types : Tuple(*TYPES), &block) : Nil forall TYPES
-        send Commands::Run, query, parameters
-        send Commands::PullAll
+      def exec_cast(query : String, parameters : Map, types : Tuple(*TYPES), metadata = Map.new, &block) : Nil forall TYPES
+        send Commands::Run, query, parameters, metadata
+        send Commands::Pull, Map{"n" => -1}
 
         query_result = read_result.as(Response)
         result = read_raw_result
         error = nil
         if query_result.is_a? Failure
-          error = ::Neo4j::QueryException.new(query_result.attrs["message"].as(String), query_result.attrs["code"].as(String))
+          error = Exception.new
         end
 
         until result[1] != 0x71
@@ -349,14 +258,13 @@ module Neo4j
           result = read_raw_result
         end
 
-        if error
-          ack_failure
-        end
+        reset if error
 
         handle_result query_result
-
-        if error
-          raise error
+        # Don't try to parse the result unless we need to
+        if result[1] == PackStream::Unpacker::StructureTypes::Failure.to_i
+          reset
+          handle_result PackStream::Unpacker.new(result).read.as(Response)
         end
       end
 
@@ -376,7 +284,8 @@ module Neo4j
       #     email: String,
       #   )
       # end
-      # connection.exec_cast(<<-CYPHER, Neo4j::Map { "email" => "me@example.com" }, {User})
+      #
+      # connection.exec_cast(<<-CYPHER, Neo4j::Map{"email" => "me@example.com"}, {User})
       #   MATCH (user:User { email: $email })
       #   RETURN user
       # CYPHER
@@ -384,7 +293,7 @@ module Neo4j
       # ```
       def exec_cast(query : String, parameters : Map, types : Tuple(*TYPES)) forall TYPES
         {% begin %}
-          results = Array({{ TYPES.type_vars.map(&.stringify.gsub(/\.class$/, "").id).stringify.tr("[]", "{}").id }}).new
+          results = Array(Tuple({{ TYPES.type_vars.map(&.instance).join(", ").id }})).new
 
           exec_cast query, parameters, types do |row|
             results << row
@@ -404,7 +313,8 @@ module Neo4j
       #     email: String,
       #   )
       # end
-      # connection.exec_cast_single(<<-CYPHER, Neo4j::Map { "email" => "me@example.com" }, {User})
+      #
+      # connection.exec_cast_single(<<-CYPHER, Neo4j::Map{"email" => "me@example.com"}, {User})
       #   MATCH (user:User { email: $email })
       #   RETURN user
       #   LIMIT 1
@@ -434,7 +344,8 @@ module Neo4j
       #     email: String,
       #   )
       # end
-      # connection.exec_cast_scalar(<<-CYPHER, Neo4j::Map { "email" => "me@example.com" }, User)
+      #
+      # connection.exec_cast_scalar(<<-CYPHER, Neo4j::Map{"email" => "me@example.com"}, User)
       #   MATCH (user:User { email: $email })
       #   RETURN user
       #   LIMIT 1
@@ -447,6 +358,23 @@ module Neo4j
 
       def exec_cast_scalar(query : String, type : T) forall T
         exec_cast_single(query, Neo4j::Map.new, {type}).first
+      end
+
+      def begin(metadata = Map.new)
+        retry 5 do
+          send Commands::Begin, metadata
+          read_result
+        end
+      end
+
+      def commit
+        send Commands::Commit
+        read_result
+      end
+
+      def rollback
+        send Commands::Rollback
+        read_result
       end
 
       # Wrap a group of queries into an atomic transaction. Yields a
@@ -462,25 +390,18 @@ module Neo4j
       # Exceptions raised within the block will roll back the transaction. To
       # roll back the transaction manually and exit the block, call
       # `txn.rollback`.
-      def transaction
+      def transaction(metadata = Map.new)
         if @transaction
           raise NestedTransactionError.new("Transaction already open, cannot open a new transaction")
         end
 
-        @transaction = Transaction.new(self)
+        transaction = @transaction = Transaction.new(self)
 
-        execute "BEGIN"
-        yield(@transaction.not_nil!).tap { execute "COMMIT" }
+        self.begin(metadata)
+        yield(transaction).tap { commit }
       rescue e : RollbackException
-        execute "ROLLBACK"
-      rescue e : NestedTransactionError
-        # We don't want our NestedTransactionError to be picked up by the
-        # catch-all rescue below, so we're explicitly capturing and re-raising
-        # here to bypass it
-        reset
-        raise e
+        rollback
       rescue e
-        execute "ROLLBACK"
         reset
         raise e
       ensure
@@ -499,16 +420,12 @@ module Neo4j
         read_result
       end
 
-      private def ack_failure
-        send Commands::AckFailure
-        read_result
-      end
-
       private def init(username, password)
-        send Commands::Init, "Neo4j.cr/#{VERSION}", {
-          "scheme" => "basic",
-          "principal" => username,
+        send Commands::Hello, {
+          "scheme"      => "basic",
+          "principal"   => username,
           "credentials" => password,
+          "user_agent"  => "Neo4j.cr/#{VERSION}",
         }
 
         case result = read_result
@@ -539,11 +456,10 @@ module Neo4j
           io.write_bytes 0x0000.to_u16, IO::ByteFormat::BigEndian
         }.to_slice
         @connection.write message
-        @connection.flush
       end
 
-      private def run(statement, parameters = Map.new, retries = 5)
-        send Commands::Run, statement, parameters
+      private def run(statement, parameters = Map.new, metadata = Map.new, retries = 5)
+        send Commands::Run, statement, parameters, metadata
 
         result = read_result
         case result
@@ -555,9 +471,9 @@ module Neo4j
           raise ::Neo4j::UnknownResult.new("Cannot identify this result: #{result.inspect}")
         end
       rescue ex : IO::Error | OpenSSL::SSL::Error
-        if retries > 0
+        if retries > 0 && @transaction.nil?
           initialize @uri, @ssl
-          run statement, parameters, retries - 1
+          run statement, parameters, metadata, retries - 1
         else
           raise ex
         end
@@ -574,14 +490,16 @@ module Neo4j
       end
 
       private def pull_all(&block) : Nil
-        send Commands::PullAll
+        send Commands::Pull, Map{"n" => -1}
 
         result = read_result
 
-        until result.is_a?(Success) || result.is_a?(Ignored)
+        until result.is_a?(Response)
           yield result.as(List)
           result = read_result
         end
+
+        handle_result result.as(Response)
       end
 
       private def pull_all : Array(List)
@@ -596,11 +514,15 @@ module Neo4j
       end
 
       EXCEPTIONS = {
-        "Neo.ClientError.Schema.IndexAlreadyExists" => IndexAlreadyExists,
-        "Neo.ClientError.Schema.ConstraintValidationFailed" => ConstraintValidationFailed,
-        "Neo.ClientError.Statement.ParameterMissing" => ParameterMissing,
-        "Neo.ClientError.Statement.SyntaxError" => SyntaxError,
+        "Neo.ClientError.Schema.IndexAlreadyExists"                => IndexAlreadyExists,
+        "Neo.ClientError.Schema.ConstraintValidationFailed"        => ConstraintValidationFailed,
+        "Neo.ClientError.Schema.EquivalentSchemaRuleAlreadyExists" => EquivalentSchemaRuleAlreadyExists,
+        "Neo.ClientError.Procedure.ProcedureCallFailed"            => ProcedureCallFailed,
+        "Neo.ClientError.Statement.ParameterMissing"               => ParameterMissing,
+        "Neo.ClientError.Statement.SyntaxError"                    => SyntaxError,
+        "Neo.ClientError.Statement.ArgumentError"                  => ArgumentError,
       }
+
       private def handle_result(result : Failure)
         exception_class = EXCEPTIONS[result.attrs["code"].as(String)]? || QueryException
         raise exception_class.new(
@@ -618,8 +540,9 @@ module Neo4j
       # Read a single result from the server in 64kb chunks. This is a bit of a
       # naive implementation that buffers the chunks until it has the full
       # result, then flattens out the chunks into a single slice and parses
-      # that slice. 
+      # that slice.
       private def read_raw_result
+        @connection.flush if @data_waiting
         length = 1_u16
         messages = [] of Bytes
         length = @connection.read_bytes(UInt16, IO::ByteFormat::BigEndian)
@@ -639,16 +562,18 @@ module Neo4j
           bytes + current_byte
         end
 
+        @data_waiting = false
         bytes
       end
 
       private def write(value)
         @connection.write_bytes value, IO::ByteFormat::BigEndian
-        @connection.flush
+        @data_waiting = true
       end
 
       private def write_value(value)
         @connection.write PackStream.pack(value)
+        @data_waiting = true
       end
 
       private def handshake
@@ -668,10 +593,12 @@ module Neo4j
 
       private def send_message(string : String)
         send_message string.to_slice
+        @data_waiting = true
       end
 
       private def send_message(bytes : Bytes)
         @connection.write bytes
+        @data_waiting = true
       end
 
       private def retry(times)
@@ -685,76 +612,6 @@ module Neo4j
             raise ex
           end
         end
-      end
-    end
-  end
-
-  class StreamingResultSet
-    include Iterable(List)
-
-    delegate complete!, to: @iterator
-
-    def initialize
-      @iterator = Iterator.new
-    end
-
-    def <<(value : List) : self
-      @iterator.channel.send value
-      self
-    end
-
-    def each
-      @iterator
-    end
-
-    class Iterator
-      include ::Iterator(List)
-
-      getter channel
-
-      def initialize
-        @channel = Channel(List).new(1)
-        @stop_channel = Channel(Nil).new(1)
-        @complete = false
-      end
-
-      def next
-        return stop if @complete
-
-        select
-        when value = @channel.receive
-          value
-        when @stop_channel.receive
-          stop
-        end
-      end
-
-      def complete!
-        @stop_channel.send nil
-        @complete = true
-      end
-    end
-  end
-
-  class StreamingResult
-    include Iterable(List)
-    include Enumerable(List)
-
-    getter type, data
-
-    def initialize(
-      @type : Success | Ignored,
-      @data : StreamingResultSet,
-    )
-    end
-
-    def each
-      @data.each
-    end
-
-    def each(&block : List ->)
-      each.each do |row|
-        yield row
       end
     end
   end

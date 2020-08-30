@@ -12,22 +12,22 @@ module Neo4j
         Record              = 0x71
 
         # Result Types
-        Success             = 0x70
-        Failure             = 0x7f
-        Ignored             = 0x7e
+        Success = 0x70
+        Failure = 0x7f
+        Ignored = 0x7e
 
         # Temporal Types
-        DateTimeWithOffset  = 0x46
-        DateTimeWithTZ      = 0x66
-        LocalDateTime       = 0x64
-        Date                = 0x44
-        LocalTime           = 0x74
-        Time                = 0x54
-        Duration            = 0x45
+        DateTimeWithOffset = 0x46
+        DateTimeWithTZ     = 0x66
+        LocalDateTime      = 0x64
+        Date               = 0x44
+        LocalTime          = 0x74
+        Time               = 0x54
+        Duration           = 0x45
 
         # Spatial Types
-        Point2D             = 0x58
-        Point3D             = 0x59
+        Point2D = 0x58
+        Point3D = 0x59
       end
 
       def initialize(string_or_io)
@@ -173,7 +173,6 @@ module Neo4j
             seconds: read_int,
             nanoseconds: read_int,
           )
-
         when StructureTypes::DateTimeWithTZ.value
           seconds = read_int.to_i64
           nanoseconds = read_int.to_i32
@@ -235,12 +234,10 @@ module Neo4j
       end
 
       @@location_cache = Hash(Int32, Time::Location).new
-      @@cache_mutex = Mutex.new
+
       private def location_for(offset : Int32)
         @@location_cache.fetch offset do
-          @@cache_mutex.synchronize do
-            @@location_cache[offset] = Time::Location.fixed(offset)
-          end
+          @@location_cache[offset] = Time::Location.fixed(offset)
         end
       end
     end

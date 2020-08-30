@@ -14,8 +14,8 @@ module Neo4j
     @write_server_addresses = Array(String).new
 
     def initialize(@entrypoint : URI, @ssl = true, @max_pool_size = 200)
-      unless entrypoint.scheme == "bolt+routing" || entrypoint.scheme == "neo4j"
-        raise NotAClusterURI.new("The cluster entrypoint should be a 'bolt+routing' or 'neo4j' URI. Got: #{entrypoint}")
+      unless {"bolt+routing", "neo4j", "neo4j+s"}.includes? entrypoint.scheme
+        raise NotAClusterURI.new("The cluster entrypoint should be a 'bolt+routing', 'neo4j', or 'neo4j+s' URI. Got: #{entrypoint.scheme.inspect}")
       end
 
       @check_again_in, @read_server_addresses, @write_server_addresses, @read_servers, @write_servers = refresh_servers
@@ -35,17 +35,39 @@ module Neo4j
       yield session
     end
 
+    def write_query(query : String, **params)
+      @write_servers.checkout do |connection|
+        connection.execute query, **params
+      end
+    end
+
+    def write_query(query : String, as types : Tuple(*T), **params, &) forall T
+      @write_servers.checkout do |connection|
+        connection.exec_cast query, params, types do |result|
+          yield result
+        end
+      end
+    end
+
+    def read_query(query : String, as types : Tuple(*T), **params, &) forall T
+      @read_servers.checkout do |connection|
+        connection.exec_cast query, params, types do |result|
+          yield result
+        end
+      end
+    end
+
     private def refresh_servers(
       read_servers : ConnectionPool? = nil,
       write_servers : ConnectionPool? = nil,
-      retries = 5,
+      retries = 5
     ) : {Time::Span, Array(String), Array(String), ConnectionPool, ConnectionPool}
       entrypoint = @entrypoint.dup
       entrypoint.scheme = "bolt"
 
       connection = Bolt::Connection.new(entrypoint, ssl: @ssl)
 
-      ttl, raw_servers = connection.execute("call dbms.cluster.routing.getServers()").data.first
+      ttl, raw_servers = connection.execute("call dbms.cluster.routing.getRoutingTable({})").data.first
       connection.close
       servers = raw_servers
         .as(Array)
@@ -71,7 +93,7 @@ module Neo4j
         max_idle_pool_size: 10,
         checkout_timeout: 5.seconds,
         retry_attempts: 3,
-        retry_delay: 200.milliseconds,
+        retry_delay: 200.milliseconds
       ) do
         host, port = read_server_addresses.sample.split(':', 2)
 
@@ -88,7 +110,7 @@ module Neo4j
         max_idle_pool_size: 10,
         checkout_timeout: 5.seconds,
         retry_attempts: 3,
-        retry_delay: 200.milliseconds,
+        retry_delay: 200.milliseconds
       ) do
         server = entrypoint.dup
         host, port = write_server_addresses
@@ -121,9 +143,31 @@ module Neo4j
         @cluster.@read_servers.checkout(&.transaction { |txn| yield txn })
       end
 
-      def exec_cast(query : String, as types : Tuple(*T), **params) forall T
+      def write_query(query : String, as types : Tuple(*T), **params) forall T
         @cluster.@write_servers.checkout do |connection|
           connection.exec_cast query, params, types
+        end
+      end
+
+      def exec_cast(query : String, as types : Tuple(*T), **params, &) forall T
+        @cluster.@write_servers.checkout do |connection|
+          connection.exec_cast query, params, types do |row|
+            yield row
+          end
+        end
+      end
+
+      def query(cypher : String, as types : Tuple(*T), **params) forall T
+        @cluster.@read_servers.checkout do |connection|
+          connection.exec_cast query, params, types
+        end
+      end
+
+      def query(cypher : String, as types : Tuple(*T), **params, &) forall T
+        @cluster.@read_servers.checkout do |connection|
+          connection.exec_cast query, params, types do |row|
+            yield row
+          end
         end
       end
 
@@ -134,8 +178,10 @@ module Neo4j
 
     class Error < ::Exception
     end
+
     class NotAClusterURI < Error
     end
+
     class SessionClosed < Error
     end
   end
