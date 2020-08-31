@@ -233,11 +233,16 @@ module Neo4j
         raise UnpackException.new(message, @lexer.byte_number)
       end
 
-      @@location_cache = Hash(Int32, Time::Location).new
-
+      @@location_cache = Hash(Int32 | String, Time::Location).new
       private def location_for(offset : Int32)
         @@location_cache.fetch offset do
           @@location_cache[offset] = Time::Location.fixed(offset)
+        end
+      end
+
+      private def location_for(name : String)
+        @@location_cache.fetch name do
+          @@location_cache[name] = Time::Location.load(name)
         end
       end
     end
