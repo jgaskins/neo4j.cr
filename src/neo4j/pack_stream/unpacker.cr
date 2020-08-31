@@ -176,8 +176,11 @@ module Neo4j
         when StructureTypes::DateTimeWithTZ.value
           seconds = read_int.to_i64
           nanoseconds = read_int.to_i32
-          location = Time::Location.load(read_string)
-          Time.local(year: 1970, month: 1, day: 1, location: location) + seconds.seconds + nanoseconds.nanoseconds
+          location = location_for(read_string)
+          starting_time = Time.local(year: 1970, month: 1, day: 1, location: location)
+          offset = starting_time.offset
+          result = starting_time + seconds.seconds + nanoseconds.nanoseconds
+          result + (starting_time.offset - result.offset).seconds
         else
           Array(Value).new(token.size) do
             read_value.as Value
