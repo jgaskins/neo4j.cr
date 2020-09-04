@@ -72,7 +72,7 @@ struct Tuple
   def from_bolt(io)
     {% begin %}
       {
-        {% for type in T.map(&.stringify.gsub(/\.class$/, "").id) %}
+        {% for type in T.map(&.instance) %}
           {{type}}.from_bolt(io),
         {% end %}
       }
@@ -117,11 +117,16 @@ def Union.from_bolt(io) : self
     {% if non_primitive_types.empty? %}
       raise ::Neo4j::UnknownType.new("Don't know how to cast #{unpacker.read_value.inspect} into #{{{T.join(" | ")}}}")
     {% else %}
-      value = unpacker.read_value #.as(Neo4j::Node)
+      value = unpacker.read_value
       {% for type in non_primitive_types %}
-        {% if type.resolve.ancestors.includes? Neo4j::MappedNode %}
+        {% if type.resolve.ancestors.includes? Neo4j::Serializable::Node %}
           node = value.as(::Neo4j::Node)
           return {{type}}.new(node) if node.labels.includes?({{type.stringify}})
+          {% if node_labels = type.annotation(::Neo4j::NodeLabels) %}
+            if ({{node_labels.args.first}} & node.labels).any?
+              return {{type}}.new(node)
+            end
+          {% end %}
         {% elsif type.resolve.ancestors.includes? Neo4j::MappedRelationship %}
           relationship = value.as(::Neo4j::Relationship)
           return {{type}}.new(relationship)

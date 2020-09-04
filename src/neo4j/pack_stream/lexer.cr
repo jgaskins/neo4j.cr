@@ -16,8 +16,7 @@ module Neo4j
         initialize IO::Memory.new(slice)
       end
 
-      def initialize(io : IO)
-        @io = io
+      def initialize(@io : IO)
         @token = Token.new
         @byte_number = 0_u64
         @current_byte = 0_u8

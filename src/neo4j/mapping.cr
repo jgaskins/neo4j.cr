@@ -1,5 +1,6 @@
 require "./type"
 require "./exceptions"
+require "./serializable"
 
 module Neo4j
   module TimeConverter
@@ -42,9 +43,6 @@ module Neo4j
     ::Neo4j.map_relationship({{__properties__}})
   end
 
-  module MappedNode
-  end
-
   module MappedRelationship
   end
 
@@ -67,7 +65,7 @@ module Neo4j
     getter node_id : Int64
     getter node_labels : Array(String)
 
-    include ::Neo4j::MappedNode
+    include ::Neo4j::Serializable::Node
 
     ::Neo4j.map_props({{__properties__}}, ::Neo4j::Node)
   end
@@ -97,7 +95,7 @@ module Neo4j
     {% end %}
 
     {% for key, value in __properties__ %}
-      @{{value[:key_id]}} : {{value[:type]}}{{ (value[:nilable] ? "?" : "").id }}
+      @{{value[:key_id]}} : {{value[:type]}}{{ (value[:nilable] ? "?" : "").id }}{{value[:default] ? " = #{value[:default]}".id : "".id}}
 
       {% if value[:getter] == nil || value[:getter] %}
         def {{key.id}} : {{value[:type]}}{{(value[:nilable] ? "?" : "").id}}
@@ -113,10 +111,6 @@ module Neo4j
         end
       {% end %}
     {% end %}
-
-    def self.from_bolt(io)
-      new ::Neo4j::PackStream::Unpacker.new(io).read_structure.as({{type}})
-    end
 
     def initialize(%node : {{type}})
       {% if type.resolve == ::Neo4j::Node %}
@@ -160,23 +154,6 @@ module Neo4j
         {% end %}
       {% end %}
     end
-
-    # def initialize(
-    #   {% for key, value in __properties__ %}
-    #     @{{key.id}} : {{value[:type]}}{{value[:default] ? " = #{value[:default]}".id : "".id}},
-    #   {% end %}
-
-    #   {% if type.resolve == ::Neo4j::Node %}
-    #     @node_id = 0i64,
-    #     @node_labels = [] of String,
-    #   {% elsif type.resolve == ::Neo4j::Relationship %}
-    #     @relationship_id = 0i64,
-    #     @node_start = 0i64,
-    #     @node_end = 0i64,
-    #     @relationship_type = "",
-    #   {% end %}
-    # )
-    # end
 
     def to_bolt_params : Neo4j::Value
       ::Neo4j::Map {

@@ -6,6 +6,7 @@ require "./neo4j/bolt/connection"
 require "./neo4j/direct_driver"
 require "./neo4j/cluster"
 require "./neo4j/driver"
+require "./neo4j/serializable"
 
 module Neo4j
   def self.connect(uri : URI, ssl : Bool = true) : Driver
