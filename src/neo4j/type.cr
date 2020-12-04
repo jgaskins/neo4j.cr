@@ -6,7 +6,7 @@ module Neo4j
       properties : Map,
     )
 
-    def initialize(@id, @labels, @properties)
+    def initialize(@id = 0i64, @labels = %w[], @properties = Map.new)
     end
   end
 

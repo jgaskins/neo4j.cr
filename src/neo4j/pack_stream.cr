@@ -19,6 +19,9 @@ module Neo4j
     class Error < Exception
     end
 
+    class Overflow < Exception
+    end
+
     class UnpackException < Error
       getter byte_number : UInt64
 

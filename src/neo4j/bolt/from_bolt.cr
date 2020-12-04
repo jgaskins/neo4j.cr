@@ -1,4 +1,5 @@
 require "uuid"
+require "uri"
 
 require "../pack_stream/token"
 require "../pack_stream/unpacker"
@@ -28,6 +29,10 @@ end
 
 def Time.from_bolt(io) : Time
   Neo4j::PackStream::Unpacker.new(io).read_structure.as(Time)
+end
+
+def URI.from_bolt(io) : URI
+  URI.parse String.from_bolt io
 end
 
 def Array.from_bolt(io)
@@ -61,6 +66,10 @@ module Neo4j
 
   def Relationship.from_bolt(io)
     PackStream::Unpacker.new(io).read_structure.as(Relationship)
+  end
+
+  def Duration.from_bolt(io)
+    PackStream::Unpacker.new(io).read_structure.as(self)
   end
 end
 
@@ -127,9 +136,14 @@ def Union.from_bolt(io) : self
               return {{type}}.new(node)
             end
           {% end %}
-        {% elsif type.resolve.ancestors.includes? Neo4j::MappedRelationship %}
-          relationship = value.as(::Neo4j::Relationship)
-          return {{type}}.new(relationship)
+        {% elsif type.resolve.ancestors.includes? Neo4j::Serializable::Relationship %}
+          rel = value.as(::Neo4j::Relationship)
+          return {{type}}.new(rel) if rel.type == {{type.stringify}}
+          {% if rel_type = type.annotation(::Neo4j::RelationshipType) %}
+            if {{rel_type.args.first}} == rel.type
+              return {{type}}.new(rel)
+            end
+          {% end %}
         {% end %}
       {% end %}
       raise ::Neo4j::UnknownType.new("Don't know how to cast #{value.inspect} into #{{{T.join(" | ")}}}")

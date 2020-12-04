@@ -67,6 +67,15 @@ module Neo4j
         end
       end
 
+      it "serializes a 16-bit integer appropriately" do
+        pack(0x42).should eq Bytes[0x42]
+        pack(0x420).should eq Bytes[0xC9, 0x4, 0x20]
+        pack(0x7FFF).should eq Bytes[0xC9, 0x7F, 0xFF]
+        pack(0x8000).should eq Bytes[0xCA, 0, 0, 0x80, 0]
+        pack(0x7FFF_FFFF).should eq Bytes[0xCA, 0x7F, 0xFF, 0xFF, 0xFF]
+        pack(0x8000_0000).should eq Bytes[0xCB, 0, 0, 0, 0, 0x80, 0, 0, 0]
+      end
+
       {
         Point2D.new(x: 1, y: 2),
         Point3D.new(x: 1, y: 2, z: 3),
