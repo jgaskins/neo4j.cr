@@ -43,11 +43,11 @@ module Neo4j
         when 0x80..0x8F
           consume_string(current_byte - 0x80)
         when 0xD0
-          consume_string(read Int8)
+          consume_string(read UInt8)
         when 0xD1
-          consume_string(read Int16)
+          consume_string(read UInt16)
         when 0xD2
-          consume_string(read Int32)
+          consume_string(read UInt32)
         when 0xC1
           consume_float(read Float64)
         when 0xC8
