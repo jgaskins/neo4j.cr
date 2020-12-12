@@ -100,7 +100,7 @@ module Neo4j
                   %found{name} = true
                   %var{name} =
                     {% if value[:converter] %}
-                      {{value[:converter]}}.from_bolt(unpacker)
+                      {{value[:converter]}}.from_bolt(unpacker).as({{value[:type]}})
                     {% elsif value[:nilable] || value[:default] != nil %}
                       begin
                         %intermediate_value = unpacker.read
@@ -115,7 +115,7 @@ module Neo4j
                       end.as({{value[:type]}}?)
                     {% else %}
                       # Do not try this at home
-                      {{value[:type]}}.from_bolt unpacker.@lexer.@io
+                      {{value[:type]}}.from_bolt(unpacker.@lexer.@io).as({{value[:type]}})
                     {% end %}
               {% end %}
             else
