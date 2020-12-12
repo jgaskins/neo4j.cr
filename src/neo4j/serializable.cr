@@ -103,11 +103,11 @@ module Neo4j
                       {{value[:converter]}}.from_bolt(unpacker).as({{value[:type]}})
                     {% elsif value[:nilable] || value[:default] != nil %}
                       begin
-                        %intermediate_value = unpacker.read
+                        %intermediate_value{name} = unpacker.read
                         # pp {{name.stringify}}: {{value}}, _value: %intermediate_value, _class: %intermediate_value.class
-                        if %intermediate_value
+                        if %intermediate_value{name}
                           {% if type = value[:type].union_types.find { |t| t < Int } %}
-                            %intermediate_value.as(Int::Signed).to_i{{type.stringify.gsub(/\D+/, "").id}}
+                            %intermediate_value{name}.as(Int::Signed).to_i{{type.stringify.gsub(/\D+/, "").id}}
                           {% else %}
                             nil
                           {% end %}
