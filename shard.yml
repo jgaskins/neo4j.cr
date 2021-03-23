@@ -4,6 +4,6 @@ version: 0.6.0
 authors:
   - Jamie Gaskins <jgaskins@gmail.com>
 
-crystal: 0.34.0
+crystal: ">= 0.34.0, < 2.0.0"
 
 license: MIT
