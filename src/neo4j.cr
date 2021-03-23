@@ -14,4 +14,6 @@ module Neo4j
       DirectDriver.new(uri, ssl)
     end
   end
+
+  alias Driver = DirectDriver | Cluster
 end
