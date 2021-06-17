@@ -13,7 +13,12 @@ module Neo4j
   module Bolt
     class Connection
       GOGOBOLT           = "\x60\x60\xB0\x17".to_slice
-      SUPPORTED_VERSIONS = {4, 0, 0, 0}
+      SUPPORTED_VERSIONS = {
+        0x00_00_02_04, # Version 4.2
+        0x00_00_01_04, # Version 4.1
+        0x00_00_00_04, # Version 4.0
+        0,
+      }
       enum Commands
         Hello    = 0x01
         Goodbye  = 0x02
