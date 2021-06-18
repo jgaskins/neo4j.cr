@@ -19,6 +19,7 @@ class SerializableNode
 
   getter id : UUID
   getter name : String
+  getter nilable_string : String?
   @[Neo4j::Field(key: "encrypted_password", converter: BCrypt::Password)]
   getter password : BCrypt::Password
   getter created_at : Time = Time.utc
@@ -59,6 +60,7 @@ module Neo4j
       node = Node.new(1234_i64, %w[MyLabel], Map {
         "id" => uuid.to_s,
         "name" => "Jamie",
+        "nilable_string" => "string value",
         "encrypted_password" => BCrypt::Password.create("password", cost: 4).to_s,
         "created_at" => Time.utc,
         # updated_at is omitted so it uses the default value
@@ -69,6 +71,7 @@ module Neo4j
 
       s_node.id.should eq uuid
       s_node.name.should eq "Jamie"
+      s_node.nilable_string.should eq "string value"
       s_node.password.verify("password").should eq true # conversion to BCrypt::Password check
       s_node.created_at.should be_a Time
       s_node.updated_at.should be_a Time

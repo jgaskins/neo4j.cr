@@ -109,7 +109,7 @@ module Neo4j
                           {% if type = value[:type].union_types.find { |t| t < Int } %}
                             %intermediate_value{name}.as(Int::Signed).to_i{{type.stringify.gsub(/\D+/, "").id}}
                           {% else %}
-                            nil
+                            %intermediate_value{name}
                           {% end %}
                         end
                       end.as({{value[:type]}}?)
