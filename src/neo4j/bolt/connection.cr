@@ -271,6 +271,8 @@ module Neo4j
           reset
           handle_result PackStream::Unpacker.new(result).read.as(Response)
         end
+
+        raise error if error
       end
 
       def exec_cast(query : String, types : Tuple(*TYPES), &block) : Nil forall TYPES

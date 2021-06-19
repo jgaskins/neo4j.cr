@@ -536,6 +536,19 @@ module Neo4j
             end
           end
 
+          it "raises an error if a non-nilable property doesn't exist on a node", focus: true do
+            expect_raises PropertyMissing do
+              connection.transaction do |txn|
+                txn.exec_cast <<-CYPHER, {Category}
+                  CREATE (category:Category { id: randomUUID() })
+                  RETURN category
+                CYPHER
+
+                txn.rollback
+              end
+            end
+          end
+
           it "returns single results" do
             connection.transaction do |txn|
               result = connection.exec_cast_single <<-CYPHER, Map.new, {Int32}
