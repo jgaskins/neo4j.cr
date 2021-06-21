@@ -235,11 +235,16 @@ module Neo4j
       # end
       # ```
       def exec_cast(query : String, parameters : Map, types : Tuple(*TYPES), metadata = Map.new, &block) : Nil forall TYPES
-        send Commands::Run, query, parameters, metadata
-        send Commands::Pull, Map{"n" => -1}
+        query_result = uninitialized Response
+        result = Bytes.empty
 
-        query_result = read_result.as(Response)
-        result = read_raw_result
+        retry 5 do
+          send Commands::Run, query, parameters, metadata
+          send Commands::Pull, Map{"n" => -1}
+
+          query_result = read_result.as(Response)
+          result = read_raw_result
+        end
         error = nil
         if query_result.is_a? Failure
           error = Exception.new
