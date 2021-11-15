@@ -50,7 +50,7 @@ module Neo4j
         # Inject the class methods into subclasses as well
 
         macro inherited
-          def self.new(unpacker : ::Neo4j::PackStream::Unpacker))
+          def self.new(unpacker : ::Neo4j::PackStream::Unpacker)
             super
           end
 
@@ -185,7 +185,7 @@ module Neo4j
         # Inject the class methods into subclasses as well
 
         macro inherited
-          def self.new(unpacker : ::Neo4j::PackStream::Unpacker))
+          def self.new(unpacker : ::Neo4j::PackStream::Unpacker)
             super
           end
 
