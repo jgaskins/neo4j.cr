@@ -250,7 +250,7 @@ module Neo4j
           error = Exception.new
         end
 
-        until result[1] != 0x71
+        while (type = PackStream::Unpacker::StructureTypes.new(result[1])).record?
           unless error
             # First 3 bytes are Structure, Record, and List
             # TODO: If the RETURN clause in the query has more than 16 items,
@@ -272,7 +272,7 @@ module Neo4j
 
         handle_result query_result
         # Don't try to parse the result unless we need to
-        if result[1] == PackStream::Unpacker::StructureTypes::Failure.to_i
+        if type.failure?
           reset
           handle_result PackStream::Unpacker.new(result).read.as(Response)
         end
@@ -410,9 +410,9 @@ module Neo4j
         transaction = @transaction = Transaction.new(self)
 
         self.begin(metadata)
-        yield(transaction).tap { commit }
-      rescue e : RollbackException
-        rollback
+        yield(transaction).tap do
+          commit unless transaction.rolled_back?
+        end
       rescue e
         reset
         raise e

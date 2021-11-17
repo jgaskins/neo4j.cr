@@ -3,7 +3,7 @@ require "./lexer"
 module Neo4j
   module PackStream
     struct Unpacker
-      enum StructureTypes : Int8
+      enum StructureTypes : UInt8
         # Primitive Types
         Node                = 0x4e
         Relationship        = 0x52

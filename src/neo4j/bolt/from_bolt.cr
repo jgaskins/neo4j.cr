@@ -79,6 +79,10 @@ end
 
 struct Tuple
   def from_bolt(io)
+    self.class.from_bolt io
+  end
+
+  def self.from_bolt(io)
     {% begin %}
       {
         {% for type in T.map(&.instance) %}

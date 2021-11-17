@@ -2,8 +2,9 @@ require "../exceptions"
 
 module Neo4j
   module Bolt
-    struct Transaction
+    class Transaction
       getter connection
+      getter? rolled_back = false
 
       delegate execute, exec_cast, exec_cast_scalar, to: connection
 
@@ -11,7 +12,11 @@ module Neo4j
       end
 
       def rollback
-        raise RollbackException.new
+        @connection.rollback
+        @rolled_back = true
+      end
+
+      struct RolledBack
       end
     end
   end
