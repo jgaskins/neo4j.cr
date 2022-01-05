@@ -19,8 +19,10 @@ module Neo4j
       macro included
         include ::Neo4j::Mappable
 
-        getter node_id : Int64
-        getter node_labels : Array(String)
+        @[Neo4j::Field(ignore: true)]
+        getter node_id : Int64 = 0i64
+        @[Neo4j::Field(ignore: true)]
+        getter node_labels : Array(String) = %w[]
 
         # Define a `new` and `from_rs` directly in the type, like JSON::Serializable
         # For proper overload resolution
@@ -144,6 +146,19 @@ module Neo4j
               @{{key}} = %var{key}.as({{value[:type]}})
             {% end %}
           {% end %}
+        {% end %}
+      end
+
+      def to_bolt_params : ::Neo4j::Value
+        {% begin %}
+          ::Neo4j::Map {
+            {% for ivar in @type.instance_vars %}
+              {% ann = ivar.annotation(::Neo4j::Field) %}
+              {% if !ann || !ann[:ignore] %}
+                "{{ivar}}" => @{{ivar}}.to_bolt_params,
+              {% end %}
+            {% end %}
+          }
         {% end %}
       end
     end
