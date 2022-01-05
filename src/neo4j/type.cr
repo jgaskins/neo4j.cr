@@ -6,7 +6,7 @@ module Neo4j
       properties : Map,
     )
 
-    def initialize(@id, @labels, @properties)
+    def initialize(@id = 0i64, @labels = %w[], @properties = Map.new)
     end
   end
 
@@ -48,7 +48,7 @@ module Neo4j
 
     def each
       (sequence.size / 2).times do |index|
-        yield({ nodes[index], relationships[index.abs - 1], nodes[index + 1] })
+        yield({nodes[index], relationships[index.abs - 1], nodes[index + 1]})
       end
     end
   end
@@ -97,7 +97,7 @@ module Neo4j
       seconds,
       milliseconds,
       microseconds,
-      nanoseconds,
+      nanoseconds
     )
       initialize(
         months: (years * 12) + months,
@@ -132,29 +132,27 @@ module Neo4j
     end
   end
 
-  alias Integer =
-    Int8 |
-    Int16 |
-    Int32 |
-    Int64
+  alias Integer = Int8 |
+                  Int16 |
+                  Int32 |
+                  Int64
 
-  alias Value =
-    Nil |
-    Bool |
-    String |
-    Integer |
-    Float64 |
-    Time |
-    Duration |
-    Point2D |
-    Point3D |
-    LatLng |
-    Node |
-    Relationship |
-    UnboundRelationship |
-    Path |
-    Array(Value) |
-    Hash(String, Value)
+  alias Value = Nil |
+                Bool |
+                String |
+                Integer |
+                Float64 |
+                Time |
+                Duration |
+                Point2D |
+                Point3D |
+                LatLng |
+                Node |
+                Relationship |
+                UnboundRelationship |
+                Path |
+                Array(Value) |
+                Hash(String, Value)
 
   alias List = Array(Value)
   alias Map = Hash(String, Value)

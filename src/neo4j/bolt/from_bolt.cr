@@ -1,4 +1,5 @@
 require "uuid"
+require "uri"
 
 require "../pack_stream/token"
 require "../pack_stream/unpacker"
@@ -30,12 +31,20 @@ def Time.from_bolt(io) : Time
   Neo4j::PackStream::Unpacker.new(io).read_structure.as(Time)
 end
 
+def URI.from_bolt(io) : URI
+  URI.parse String.from_bolt io
+end
+
 def Array.from_bolt(io)
   unpacker = Neo4j::PackStream::Unpacker.new(io)
 
   token = unpacker.next_token
   unpacker.check Neo4j::PackStream::Token::Type::Array
   new(token.size.to_i32) { T.from_bolt(io) }
+end
+
+def Hash.from_bolt(io)
+  Neo4j::PackStream::Unpacker.new(io).read_hash.as(Hash(K, V))
 end
 
 module Neo4j
@@ -58,6 +67,10 @@ module Neo4j
   def Relationship.from_bolt(io)
     PackStream::Unpacker.new(io).read_structure.as(Relationship)
   end
+
+  def Duration.from_bolt(io)
+    PackStream::Unpacker.new(io).read_structure.as(self)
+  end
 end
 
 def UUID.from_bolt(io)
@@ -66,9 +79,13 @@ end
 
 struct Tuple
   def from_bolt(io)
+    self.class.from_bolt io
+  end
+
+  def self.from_bolt(io)
     {% begin %}
       {
-        {% for type in T.map(&.stringify.gsub(/\.class$/, "").id) %}
+        {% for type in T.map(&.instance) %}
           {{type}}.from_bolt(io),
         {% end %}
       }
@@ -90,11 +107,10 @@ def Union.from_bolt(io) : self
     {% if T.any? { |type| type < Int } %}
       if token.type.int?
         {% largest_int_size = T
-          .select { |t| t.stringify.includes? "Int" }
-          .map { |t| t.stringify.gsub(/Int/, "").to_i }
-          .sort
-          .last
-        %}
+             .select { |t| t.stringify.includes? "Int" }
+             .map { |t| t.stringify.gsub(/Int/, "").to_i }
+             .sort
+             .last %}
         return unpacker.read_int.to_i{{largest_int_size}}
       end
     {% end %}
@@ -114,11 +130,53 @@ def Union.from_bolt(io) : self
     {% if non_primitive_types.empty? %}
       raise ::Neo4j::UnknownType.new("Don't know how to cast #{unpacker.read_value.inspect} into #{{{T.join(" | ")}}}")
     {% else %}
-      node = unpacker.read_value.as(Neo4j::Node)
+      value = unpacker.read_value
       {% for type in non_primitive_types %}
-        return {{type}}.new(node) if node.labels.includes?({{type.stringify}})
+        {% if type.resolve.ancestors.includes? Neo4j::Serializable::Node %}
+          node = value.as(::Neo4j::Node)
+          return {{type}}.new(node) if node.labels.includes?({{type.stringify}})
+          {% if node_labels = type.annotation(::Neo4j::NodeLabels) %}
+            if ({{node_labels.args.first}} & node.labels).any?
+              return {{type}}.new(node)
+            end
+          {% end %}
+        {% elsif type.resolve.ancestors.includes? Neo4j::Serializable::Relationship %}
+          rel = value.as(::Neo4j::Relationship)
+          return {{type}}.new(rel) if rel.type == {{type.stringify}}
+          {% if rel_type = type.annotation(::Neo4j::RelationshipType) %}
+            if {{rel_type.args.first}} == rel.type
+              return {{type}}.new(rel)
+            end
+          {% end %}
+        {% end %}
       {% end %}
-      raise ::Neo4j::UnknownType.new("Don't know how to cast #{node.inspect} into #{{{T}}.inspect}")
+      raise ::Neo4j::UnknownType.new("Don't know how to cast #{value.inspect} into #{{{T.join(" | ")}}}")
     {% end %}
   {% end %}
+end
+
+class Object
+  def to_bolt_params : Neo4j::Value
+    as Neo4j::Value
+  end
+end
+
+class Hash
+  def to_bolt_params : Neo4j::Value
+    each_with_object(Neo4j::Map.new) do |(key, value), hash|
+      hash[key] = value.to_bolt_params.as(Neo4j::Value)
+    end.as(Neo4j::Value)
+  end
+end
+
+class Array
+  def to_bolt_params : Neo4j::Value
+    map(&.to_bolt_params.as(Neo4j::Value)).as Neo4j::Value
+  end
+end
+
+struct UUID
+  def to_bolt_params : Neo4j::Value
+    to_s.to_bolt_params
+  end
 end

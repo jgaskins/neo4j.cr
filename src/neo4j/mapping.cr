@@ -1,13 +1,15 @@
 require "./type"
 require "./exceptions"
+require "./serializable"
 
 module Neo4j
   module TimeConverter
-    def self.serialize(time)
+    def self.serialize(time : Time) : Value
+      time.to_bolt_params
     end
 
     def self.deserialize(value)
-      raise ArgumentError.new("Property {{key.id}} must be a String or Int value to cast into a Time")
+      raise ::ArgumentError.new("Property {{key.id}} must be a String or Int value to cast into a Time")
     end
 
     def self.deserialize(value : String) : Time
@@ -25,7 +27,15 @@ module Neo4j
 
   module UUIDConverter
     def self.deserialize(value)
-      UUID.new(value.as(String))
+      raise "Cannot convert #{value.inspect} to UUID"
+    end
+
+    def self.deserialize(value : String)
+      UUID.new(value)
+    end
+
+    def self.serialize(value : UUID) : Neo4j::Value
+      value.to_s.to_bolt_params
     end
   end
 
@@ -33,11 +43,16 @@ module Neo4j
     ::Neo4j.map_relationship({{__properties__}})
   end
 
+  module MappedRelationship
+  end
+
   macro map_relationship(__properties__)
     getter relationship_id : Int64
     getter node_start : Int64
     getter node_end : Int64
     getter relationship_type : String
+
+    include ::Neo4j::MappedRelationship
 
     ::Neo4j.map_props({{__properties__}}, ::Neo4j::Relationship)
   end
@@ -50,13 +65,15 @@ module Neo4j
     getter node_id : Int64
     getter node_labels : Array(String)
 
+    include ::Neo4j::Serializable::Node
+
     ::Neo4j.map_props({{__properties__}}, ::Neo4j::Node)
   end
 
   macro map_props(__properties__, type)
     {% for key, value in __properties__ %}
       {% unless value.is_a?(HashLiteral) || value.is_a?(NamedTupleLiteral) %}
-        {% __properties__[key] = { type: value } %}
+        {% __properties__[key] = {type: value} %}
       {% end %}
       {% __properties__[key][:key_id] = key.id.gsub(/\?$/, "") %}
       {% if __properties__[key][:type].is_a?(Generic) && __properties__[key][:type].type_vars.any?(&.resolve.nilable?) %}
@@ -78,7 +95,7 @@ module Neo4j
     {% end %}
 
     {% for key, value in __properties__ %}
-      @{{value[:key_id]}} : {{value[:type]}}{{ (value[:nilable] ? "?" : "").id }}
+      @{{value[:key_id]}} : {{value[:type]}}{{ (value[:nilable] ? "?" : "").id }}{{value[:default] ? " = #{value[:default]}".id : "".id}}
 
       {% if value[:getter] == nil || value[:getter] %}
         def {{key.id}} : {{value[:type]}}{{(value[:nilable] ? "?" : "").id}}
@@ -94,10 +111,6 @@ module Neo4j
         end
       {% end %}
     {% end %}
-
-    def self.from_bolt(io)
-      new ::Neo4j::PackStream::Unpacker.new(io).read_structure.as(::Neo4j::Node)
-    end
 
     def initialize(%node : {{type}})
       {% if type.resolve == ::Neo4j::Node %}
@@ -118,9 +131,9 @@ module Neo4j
             nil
           {% else %}
             {% if type.resolve == ::Neo4j::Node %}
-              raise ::Neo4j::PropertyMissing.new("Node with id #{@node_id} and labels #{@node_labels.inspect} is missing property #{key}")
+              raise ::Neo4j::PropertyMissing.new("Node with id #{@node_id} and labels #{@node_labels.inspect} is missing property #{key.inspect}")
             {% elsif type.resolve == ::Neo4j::Relationship %}
-              raise ::Neo4j::PropertyMissing.new("Relationship with id #{@relationship_id} and type #{@relationship_type.inspect} is missing property #{key}")
+              raise ::Neo4j::PropertyMissing.new("Relationship with id #{@relationship_id} and type #{@relationship_type.inspect} is missing property #{key.inspect}")
             {% end %}
           {% end %}
         end
@@ -140,6 +153,14 @@ module Neo4j
           @{{key.id}} = %property_value.as({{value[:type]}}{{(value[:nilable] && !value[:optional] ? "?" : "").id}})
         {% end %}
       {% end %}
+    end
+
+    def to_bolt_params : Neo4j::Value
+      ::Neo4j::Map {
+        {% for var, type in __properties__ %}
+          {{var.stringify}} => {{type[:converter] ? "#{type[:converter]}.serialize(#{var.id})".id : var.id}}.to_bolt_params,
+        {% end %}
+      }.as(Neo4j::Value)
     end
   end
 end

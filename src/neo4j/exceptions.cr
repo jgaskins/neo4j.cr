@@ -23,6 +23,21 @@ module Neo4j
   class ConstraintValidationFailed < QueryException
   end
 
+  class EquivalentSchemaRuleAlreadyExists < QueryException
+  end
+
+  class ProcedureCallFailed < QueryException
+  end
+
+  class ParameterMissing < QueryException
+  end
+
+  class ArgumentError < QueryException
+  end
+
+  class SyntaxError < QueryException
+  end
+
   class RollbackException < Exception
   end
 

@@ -3,7 +3,7 @@ require "./lexer"
 module Neo4j
   module PackStream
     struct Unpacker
-      enum StructureTypes : Int8
+      enum StructureTypes : UInt8
         # Primitive Types
         Node                = 0x4e
         Relationship        = 0x52
@@ -12,22 +12,22 @@ module Neo4j
         Record              = 0x71
 
         # Result Types
-        Success             = 0x70
-        Failure             = 0x7f
-        Ignored             = 0x7e
+        Success = 0x70
+        Failure = 0x7f
+        Ignored = 0x7e
 
         # Temporal Types
-        DateTimeWithOffset  = 0x46
-        DateTimeWithTZ      = 0x66
-        LocalDateTime       = 0x64
-        Date                = 0x44
-        LocalTime           = 0x74
-        Time                = 0x54
-        Duration            = 0x45
+        DateTimeWithOffset = 0x46
+        DateTimeWithTZ     = 0x66
+        LocalDateTime      = 0x64
+        Date               = 0x44
+        LocalTime          = 0x74
+        Time               = 0x54
+        Duration           = 0x45
 
         # Spatial Types
-        Point2D             = 0x58
-        Point3D             = 0x59
+        Point2D = 0x58
+        Point3D = 0x59
       end
 
       def initialize(string_or_io)
@@ -154,10 +154,10 @@ module Neo4j
         when StructureTypes::Point2D.value
           type = read_int.to_i16
           case type
-          when 7203
-            Point2D.new(type: type, x: read_float, y: read_float)
           when 4326
             LatLng.new(type: type, longitude: read_float, latitude: read_float)
+          else
+            Point2D.new(type: type, x: read_float, y: read_float)
           end
         when StructureTypes::Point3D.value
           Point3D.new(
@@ -173,12 +173,14 @@ module Neo4j
             seconds: read_int,
             nanoseconds: read_int,
           )
-
         when StructureTypes::DateTimeWithTZ.value
           seconds = read_int.to_i64
           nanoseconds = read_int.to_i32
-          location = Time::Location.load(read_string)
-          Time.local(year: 1970, month: 1, day: 1, location: location) + seconds.seconds + nanoseconds.nanoseconds
+          location = location_for(read_string)
+          starting_time = Time.local(year: 1970, month: 1, day: 1, location: location)
+          offset = starting_time.offset
+          result = starting_time + seconds.seconds + nanoseconds.nanoseconds
+          result + (starting_time.offset - result.offset).seconds
         else
           Array(Value).new(token.size) do
             read_value.as Value
@@ -234,13 +236,16 @@ module Neo4j
         raise UnpackException.new(message, @lexer.byte_number)
       end
 
-      @@location_cache = Hash(Int32, Time::Location).new
-      @@cache_mutex = Mutex.new
+      @@location_cache = Hash(Int32 | String, Time::Location).new
       private def location_for(offset : Int32)
         @@location_cache.fetch offset do
-          @@cache_mutex.synchronize do
-            @@location_cache[offset] = Time::Location.fixed(offset)
-          end
+          @@location_cache[offset] = Time::Location.fixed(offset)
+        end
+      end
+
+      private def location_for(name : String)
+        @@location_cache.fetch name do
+          @@location_cache[name] = Time::Location.load(name)
         end
       end
     end

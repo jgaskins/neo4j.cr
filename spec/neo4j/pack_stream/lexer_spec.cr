@@ -1,5 +1,7 @@
 require "../../spec_helper"
 
+require "../../../src/neo4j/pack_stream/lexer"
+
 module Neo4j
   module PackStream
     describe Lexer do
@@ -48,7 +50,7 @@ module Neo4j
         # 0xC9 = 16 bit
         # 0xCA = 32 bit
         # 0xCB = 64 bit
-        lexer = Lexer.new("\x00\x7F\xC8\x01\xC9\x7F\x02\xCA\x00\x00\x00\x03\xCB\x10\x00\x00\x00\x00\x00\x00\x04")
+        lexer = Lexer.new("\x00\x7F\xC8\x01\xC9\x7F\x02\xCA\x00\x00\x00\x03\xCB\x10\x00\x00\x00\x00\x00\x00\x04\xf8")
 
         lexer.next_token.int_value.should eq 0
         lexer.next_token.int_value.should eq 0x7f
@@ -56,6 +58,7 @@ module Neo4j
         lexer.next_token.int_value.should eq 0x7f02
         lexer.next_token.int_value.should eq 3
         lexer.next_token.int_value.should eq 0x1000_0000_0000_0004
+        lexer.next_token.int_value.should eq -8
       end
 
       it "lexes arrays" do

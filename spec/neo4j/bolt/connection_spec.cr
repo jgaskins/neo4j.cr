@@ -134,6 +134,7 @@ module Neo4j
         end
 
         it "handles exceptions" do
+          connection.execute "return 42"
           begin
             connection.execute "omg lol"
           rescue QueryException
@@ -141,9 +142,10 @@ module Neo4j
           end
 
           begin
+            connection.execute "call db.indexes"
             connection.execute "create index on :Foo(id)"
             connection.execute "create constraint on (foo:Foo) assert foo.id is unique"
-            raise Exception.new("Creating duplicate constraint did not ")
+            raise Exception.new("Creating duplicate constraint did not invoke IndexAlreadyExists")
           rescue ex : IndexAlreadyExists
           rescue ex
             raise Exception.new("Expected IndexAlreadyExists, got #{ex.inspect}")
@@ -151,8 +153,39 @@ module Neo4j
             connection.execute "drop index on :Foo(id)"
           end
 
-          result = connection.execute "return 42"
+          begin
+            connection.transaction do |t|
+              connection.exec_cast "return $oops", {wrong: "name"}, {String} do |(string)|
+                pp string
+              end
+            end
+          rescue ex : ParameterMissing
+          end
 
+          begin
+            # Invalid argument to a function
+            connection.execute "return datetime({ timezone: -18000 })"
+          rescue error
+          ensure
+            error.should be_a Neo4j::ArgumentError
+          end
+
+          begin
+            # Invalid argument to a function
+            connection.exec_cast "return datetime({ timezone: -18000 })", {Time}
+          rescue error
+          ensure
+            error.should be_a Neo4j::ArgumentError
+          end
+
+          begin
+            connection.exec_cast "with 42 as foo return fo", {Int64}, do |(foo)|
+              pp foo
+            end
+          rescue ex : SyntaxError
+          end
+
+          result = connection.execute "return 42"
           result.first.first.should eq 42
         end
 
@@ -197,6 +230,7 @@ module Neo4j
             id.should_not be_nil
 
             result = connection.execute "MATCH (u) WHERE ID(u) = $id RETURN u", id: id
+            result.type.should be_a Success
             result.any?.should be_false
           end
 
@@ -211,6 +245,8 @@ module Neo4j
 
               raise "This should never run"
             end
+
+            connection.execute("RETURN 42").data.should eq [[42]]
           end
 
           it "does not allow nested transactions" do
@@ -291,26 +327,6 @@ module Neo4j
             point2d.should eq Point2D.new(x: 1, y: 2)
             point3d.should eq Point3D.new(x: 1, y: 2, z: 3)
             latlng.should eq LatLng.new(latitude: 39, longitude: -76)
-          end
-        end
-
-        it "streams results" do
-          connection.transaction do |txn|
-            connection.execute "MATCH (test:TestNode) DETACH DELETE test"
-
-            3.times do |id|
-              connection.execute "CREATE (:TestNode { id: $id })", id: id
-            end
-
-            results = connection.stream(<<-CYPHER)
-              MATCH (test:TestNode) RETURN test
-            CYPHER
-
-            results.first # Consumes the first result
-            results.count(&.itself).should eq 2 # So there are 2 left over
-            results.count(&.itself).should eq 0 # Now there are none left
-
-            txn.rollback
           end
         end
 
@@ -520,6 +536,19 @@ module Neo4j
             end
           end
 
+          it "raises an error if a non-nilable property doesn't exist on a node", focus: true do
+            expect_raises PropertyMissing do
+              connection.transaction do |txn|
+                txn.exec_cast <<-CYPHER, {Category}
+                  CREATE (category:Category { id: randomUUID() })
+                  RETURN category
+                CYPHER
+
+                txn.rollback
+              end
+            end
+          end
+
           it "returns single results" do
             connection.transaction do |txn|
               result = connection.exec_cast_single <<-CYPHER, Map.new, {Int32}
@@ -579,10 +608,8 @@ module Neo4j
 
               connection.exec_cast query, Map{"id" => "123"}, {Subscription, User?} do |(subscription, user)|
                 if subscription.amount_cents == 100_00
-                  pp user
                   user.should be_a User
                 elsif subscription.amount_cents == 50_00
-                  pp user
                   user.should eq nil
                 end
               end

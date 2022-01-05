@@ -1,4 +1,5 @@
 require "./token"
+require "../pack_stream"
 
 module Neo4j
   module PackStream
@@ -15,8 +16,7 @@ module Neo4j
         initialize IO::Memory.new(slice)
       end
 
-      def initialize(io : IO)
-        @io = io
+      def initialize(@io : IO)
         @token = Token.new
         @byte_number = 0_u64
         @current_byte = 0_u8
@@ -43,11 +43,11 @@ module Neo4j
         when 0x80..0x8F
           consume_string(current_byte - 0x80)
         when 0xD0
-          consume_string(read Int8)
+          consume_string(read UInt8)
         when 0xD1
-          consume_string(read Int16)
+          consume_string(read UInt16)
         when 0xD2
-          consume_string(read Int32)
+          consume_string(read UInt32)
         when 0xC1
           consume_float(read Float64)
         when 0xC8
@@ -87,7 +87,9 @@ module Neo4j
           @token.int_value = current_byte.to_i8
         when 0xF0..0xFF
           @token.type = Token::Type::Int
-          @token.int_value = current_byte.to_i8
+          # Allow overflow to make this negative, because that's actually the
+          # point of this range of values.
+          @token.int_value = current_byte.to_i8!
         else
           unexpected_byte!
         end

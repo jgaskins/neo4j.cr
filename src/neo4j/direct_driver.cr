@@ -1,16 +1,17 @@
 require "./connection_pool"
 require "./session"
+require "./driver"
 
 module Neo4j
-  class DirectDriver
+  class DirectDriver < Driver
     def initialize(@uri : URI, @ssl : Bool = true)
       @connection_pool = ConnectionPool.new(
-        initial_pool_size: 1,
+        initial_pool_size: 0,
         max_pool_size: 0, # 0 == unlimited
-        max_idle_pool_size: 10,
+        max_idle_pool_size: @uri.query_params.fetch("max_idle_pool_size", "20").to_i,
         checkout_timeout: 5.seconds,
         retry_attempts: 3,
-        retry_delay: 200.milliseconds,
+        retry_delay: 200.milliseconds
       ) do
         Bolt::Connection.new(uri, ssl: ssl)
       end
@@ -25,6 +26,26 @@ module Neo4j
       yield session
     ensure
       session.close if session
+    end
+
+    def write_query(query : String, **params)
+      connection(&.execute(query, **params))
+    end
+
+    def read_query(query : String, as types : Tuple(*T), **params, &) forall T
+      connection(&.exec_cast(query, params, types) { |row| yield row })
+    end
+
+    def read_query(query : String, as types : Tuple(*T), **params) forall T
+      connection(&.exec_cast(query, params, types))
+    end
+
+    def write_query(query : String, as types : Tuple(*T), **params, &) forall T
+      connection(&.exec_cast(query, params, types) { |row| yield row })
+    end
+
+    def write_query(query : String, as types : Tuple(*T), **params) forall T
+      connection(&.exec_cast(query, params, types))
     end
 
     def connection
@@ -43,12 +64,28 @@ module Neo4j
       def initialize(@driver : DirectDriver)
       end
 
-      def write_transaction
-        transaction { |txn| yield txn }
+      def write_transaction(retries = 0)
+        loop do
+          return transaction { |txn| yield txn }
+        rescue ex
+          if retries <= 0
+            raise ex
+          else
+            retries -= 1
+          end
+        end
       end
 
-      def read_transaction
-        transaction { |txn| yield txn }
+      def read_transaction(retries = 0)
+        loop do
+          return transaction { |txn| yield txn }
+        rescue ex
+          if retries <= 0
+            raise ex
+          else
+            retries -= 1
+          end
+        end
       end
 
       def transaction
@@ -57,6 +94,10 @@ module Neo4j
             yield txn
           end
         end
+      end
+
+      def exec_cast(query : String, as types, **params)
+        transaction(&.exec_cast(query, params, types))
       end
 
       def connection : Bolt::Connection
@@ -76,6 +117,10 @@ module Neo4j
 
       def closed? : Bool
         @closed
+      end
+
+      def finalize
+        close
       end
     end
   end

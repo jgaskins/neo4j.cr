@@ -54,34 +54,20 @@ module Neo4j
       end
 
       def write(value : Int8 | Int16 | Int32 | Int64)
-        if value >= 0
-          if Int8::MAX >= value
-            write_byte(0xC8)
-            write_byte(value.to_u8)
-          elsif Int16::MAX >= value
-            write_byte(0xC9)
-            write_value(value.to_u16)
-          elsif Int32::MAX >= value
-            write_byte(0xCA)
-            write_value(value.to_u32)
-          else
-            write_byte(0xCB)
-            write_value(value.to_u64)
-          end
+        if -0x10 <= value < 0x80
+          write_byte value.to_u8!
+        elsif -0x80 <= value < -0x10
+          write_byte 0xC8
+          write_value value.to_i8
+        elsif -0x8000 <= value < 0x8000
+          write_byte 0xC9
+          write_value value.to_i16
+        elsif -0x8000_0000 <= value < 0x8000_0000
+          write_byte 0xCA
+          write_value value.to_i32
         else
-          if Int8::MIN <= value
-            write_byte(0xC8)
-            write_value(value.to_i8)
-          elsif Int16::MIN <= value
-            write_byte(0xC9)
-            write_value(value.to_i16)
-          elsif Int32::MIN <= value
-            write_byte(0xCA)
-            write_value(value.to_i32)
-          else
-            write_byte(0xCB)
-            write_value(value.to_i64)
-          end
+          write_byte 0xCB
+          write_value value.to_i64
         end
         self
       end
