@@ -125,26 +125,27 @@ require "uuid"
 class User
   include Neo4j::Serializable::Node
 
-  getter uuid: UUID
-  getter email: String
-  getter name: String
-  getter registered_at: Time
+  getter uuid : UUID
+  getter email : String
+  getter name : String
+  getter registered_at : Time
 end
 
 class Product
   include Neo4j::Serializable::Node
 
-  getter uuid: UUID
-  getter name: String
-  getter description: String
-  getter price: Int32
-  getter created_at: Time
+  getter uuid : UUID
+  getter name : String
+  getter description : String
+  getter price : Int32
+  getter created_at : Time
 end
 
 class CartItem
   include Neo4j::Serializable::Relationship
-  getter quantity: Int32
-  getter price: Int32
+
+  getter quantity : Int32
+  getter price : Int32
 end
 ```
 
