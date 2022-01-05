@@ -35,11 +35,11 @@ This will return a cluster driver or a direct driver depending on whether you pr
 
 ```crystal
 struct Person
-  Neo4j.map_node(
-    id: UUID,
-    name: String,
-    email: String,
-  )
+  include Neo4j::Serializable::Node
+
+  getter id: UUID
+  getter name: String
+  getter email: String
 end
 
 driver.session do |session|
@@ -123,29 +123,28 @@ Similar to `JSON.mapping` in the Crystal standard library, you can map nodes and
 require "uuid"
 
 class User
-  Neo4j.map_node(
-    uuid: UUID,
-    email: String,
-    name: String
-    registered_at: Time,
-  )
+  include Neo4j::Serializable::Node
+
+  getter uuid: UUID
+  getter email: String
+  getter name: String
+  getter registered_at: Time
 end
 
 class Product
-  Neo4j.map_node(
-    uuid: UUID,
-    name: String,
-    description: String,
-    price: Int32,
-    created_at: Time,
-  )
+  include Neo4j::Serializable::Node
+
+  getter uuid: UUID
+  getter name: String
+  getter description: String
+  getter price: Int32
+  getter created_at: Time
 end
 
 class CartItem
-  Neo4j.map_relationship(
-    quantity: Int32,
-    price: Int32,
-  )
+  include Neo4j::Serializable::Relationship
+  getter quantity: Int32
+  getter price: Int32
 end
 ```
 
